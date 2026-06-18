@@ -10,6 +10,6 @@ RUN pnpm install --filter ./apps/api... --ignore-workspace
 COPY apps/api ./apps/api
 
 WORKDIR /app/apps/api
+RUN ./node_modules/.bin/nest build
 EXPOSE 4000
-CMD ["pnpm", "start:dev"]
-
+CMD ["node", "dist/main.js"]
