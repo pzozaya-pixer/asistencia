@@ -1,0 +1,19 @@
+{
+  "name": "asistencia-platform",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.0.7",
+  "scripts": {
+    "dev:web": "pnpm --dir apps/web dev",
+    "dev:api": "pnpm --dir apps/api start:dev",
+    "build:web": "pnpm --dir apps/web build",
+    "build:api": "pnpm --dir apps/api build",
+    "lint:web": "pnpm --dir apps/web lint",
+    "lint:api": "pnpm --dir apps/api lint",
+    "test:api": "pnpm --dir apps/api test",
+    "check": "pnpm lint:web && pnpm lint:api",
+    "compose:up": "docker compose up -d",
+    "compose:down": "docker compose down"
+  }
+}
+
