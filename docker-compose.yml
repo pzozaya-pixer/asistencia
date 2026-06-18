@@ -10,8 +10,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       TZ: ${TZ:-Europe/Madrid}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
@@ -140,4 +138,3 @@ volumes:
   postgres_data:
   minio_data:
   n8n_data:
-
