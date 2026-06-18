@@ -6,7 +6,7 @@ export default function LoginPage() {
     <ScreenFrame
       eyebrow="Control de asistencia"
       title="Acceso para responsables"
-      description="Base demo sin backend real, optimizada para acceso rápido desde móvil o tablet en punto de entrada."
+      description="Acceso conectado a la API del entorno, optimizado para móvil o tablet en punto de entrada."
       aside={
         <div className="space-y-4 rounded-[28px] border border-white/60 bg-white/75 p-5 shadow-panel">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-signal">

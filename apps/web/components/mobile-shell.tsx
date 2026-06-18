@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { startTransition, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
+import { clearSession, getStoredUser, type SessionUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -13,6 +15,17 @@ const navItems = [
 
 export function MobileShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<SessionUser | null>(null);
+
+  useEffect(() => {
+    setUser(getStoredUser());
+  }, [pathname]);
+
+  function handleLogout() {
+    clearSession();
+    startTransition(() => router.replace("/login"));
+  }
 
   return (
     <div className="min-h-screen px-3 py-4 sm:px-5 lg:px-8">
@@ -29,20 +42,39 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
               Shell base responsive para responsables. Pensado para uso en
               tablet vertical y móvil durante acreditación.
             </p>
+            {user ? (
+              <div className="flex flex-wrap items-center gap-3 pt-2 text-sm text-slate-200">
+                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1">
+                  {user.fullName}
+                </span>
+                <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-cyan-100">
+                  {user.role}
+                </span>
+              </div>
+            ) : null}
           </div>
-          <div className="grid grid-cols-3 gap-2 rounded-[28px] bg-white/5 p-2">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "rounded-[22px] px-3 py-3 text-center text-sm font-semibold text-slate-200 transition hover:bg-white/10 hover:text-white",
-                  pathname === item.href && "bg-white text-ink hover:bg-white"
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2 rounded-[28px] bg-white/5 p-2">
+              {navItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "rounded-[22px] px-3 py-3 text-center text-sm font-semibold text-slate-200 transition hover:bg-white/10 hover:text-white",
+                    pathname === item.href && "bg-white text-ink hover:bg-white"
+                  )}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full rounded-[22px] border border-white/15 bg-white/5 px-3 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/10 hover:text-white"
+            >
+              Cerrar sesión
+            </button>
           </div>
         </header>
         <div className="flex-1">{children}</div>

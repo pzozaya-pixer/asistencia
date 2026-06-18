@@ -1,3 +1,4 @@
+import { DashboardAuthGate } from "@/components/dashboard-auth-gate";
 import { MobileShell } from "@/components/mobile-shell";
 
 export default function DashboardGroupLayout({
@@ -5,5 +6,9 @@ export default function DashboardGroupLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return <MobileShell>{children}</MobileShell>;
+  return (
+    <DashboardAuthGate>
+      <MobileShell>{children}</MobileShell>
+    </DashboardAuthGate>
+  );
 }

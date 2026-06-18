@@ -1,6 +1,74 @@
-import Link from "next/link";
+"use client";
+
+import { startTransition, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+
+import {
+  clearSession,
+  fetchSessionUser,
+  getStoredAccessToken,
+  loginWithPassword,
+  storeSession
+} from "@/lib/auth";
 
 export function LoginCard() {
+  const router = useRouter();
+  const [email, setEmail] = useState("responsable@demo.local");
+  const [password, setPassword] = useState("responsable123");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function recoverSession() {
+      const token = getStoredAccessToken();
+
+      if (!token) {
+        return;
+      }
+
+      try {
+        await fetchSessionUser(token);
+
+        if (!cancelled) {
+          startTransition(() => router.replace("/dashboard"));
+        }
+      } catch {
+        if (!cancelled) {
+          clearSession();
+          setError(null);
+        }
+      }
+    }
+
+    void recoverSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const session = await loginWithPassword(email, password);
+      storeSession(session);
+      startTransition(() => router.replace("/dashboard"));
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "No se pudo iniciar la sesión."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className="glass-panel w-full max-w-md rounded-[36px] border border-white/70 p-6 shadow-panel sm:p-8">
       <div className="mb-8 space-y-2">
@@ -8,46 +76,58 @@ export function LoginCard() {
           Responsable
         </p>
         <h2 className="font-[family:var(--font-heading)] text-3xl font-bold text-ink">
-          Iniciar sesión demo
+          Iniciar sesión operativa
         </h2>
         <p className="text-sm leading-6 text-slate-600">
-          Acceso de demostración con datos mock. El login real podrá conectarse
-          después con autenticación externa.
+          Este acceso ya valida contra la API y aplica roles reales del
+          scaffolding actual.
         </p>
       </div>
 
-      <form className="space-y-4">
+      <form className="space-y-4" onSubmit={handleSubmit}>
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-slate-700">
-            Usuario
+            Email
           </span>
           <input
-            type="text"
-            defaultValue="responsable.demo"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             className="w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm text-ink outline-none transition focus:border-signal focus:ring-4 focus:ring-signal/10"
           />
         </label>
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-slate-700">
-            PIN
+            Contraseña
           </span>
           <input
             type="password"
-            defaultValue="123456"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
             className="w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm text-ink outline-none transition focus:border-signal focus:ring-4 focus:ring-signal/10"
           />
         </label>
 
         <div className="rounded-[28px] border border-cyan-100 bg-cyan-50/80 px-4 py-3 text-sm text-cyan-900">
-          Credenciales de demo precargadas para agilizar la revisión del flujo.
+          <p className="font-semibold text-cyan-950">Credenciales demo activas</p>
+          <p className="mt-1">admin@demo.local / admin123</p>
+          <p>responsable@demo.local / responsable123</p>
+          <p>operador@demo.local / operador123</p>
         </div>
 
-        <Link
-          href="/dashboard"
-          className="flex w-full items-center justify-center rounded-full bg-ink px-5 py-3.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800"
+        {error ? (
+          <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </div>
+        ) : null}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="flex w-full items-center justify-center rounded-full bg-ink px-5 py-3.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          Entrar al panel
-        </Link>
+          {isSubmitting ? "Validando acceso..." : "Entrar al panel"}
+        </button>
       </form>
     </div>
   );

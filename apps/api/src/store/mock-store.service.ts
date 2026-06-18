@@ -42,30 +42,37 @@ export interface MockUserProfile {
   role: Role;
 }
 
+interface MockUserRecord extends MockUserProfile {
+  password: string;
+}
+
 @Injectable()
 export class MockStoreService {
   private activitySequence = 3;
   private attendeeSequence = 3;
   private attendanceSequence = 2;
 
-  private readonly users: MockUserProfile[] = [
+  private readonly users: MockUserRecord[] = [
     {
       id: 'user-admin',
       email: 'admin@demo.local',
       fullName: 'Demo Admin',
-      role: Role.Admin,
+      role: Role.SuperAdmin,
+      password: 'admin123',
     },
     {
-      id: 'user-organizer',
-      email: 'organizer@demo.local',
-      fullName: 'Demo Organizer',
-      role: Role.Organizer,
+      id: 'user-responsable',
+      email: 'responsable@demo.local',
+      fullName: 'Responsable Demo',
+      role: Role.Responsable,
+      password: 'responsable123',
     },
     {
-      id: 'user-viewer',
-      email: 'viewer@demo.local',
-      fullName: 'Demo Viewer',
-      role: Role.Viewer,
+      id: 'user-operador',
+      email: 'operador@demo.local',
+      fullName: 'Operador Lectura Demo',
+      role: Role.OperadorLectura,
+      password: 'operador123',
     },
   ];
 
@@ -126,11 +133,37 @@ export class MockStoreService {
   ];
 
   listUsers(): MockUserProfile[] {
-    return [...this.users];
+    return this.users.map(({ password: _password, ...user }) => ({ ...user }));
   }
 
   getUserByEmail(email: string): MockUserProfile | undefined {
-    return this.users.find((user) => user.email === email);
+    const user = this.users.find(
+      (candidate) => candidate.email.toLowerCase() === email.toLowerCase(),
+    );
+
+    if (!user) {
+      return undefined;
+    }
+
+    const { password: _password, ...profile } = user;
+    return profile;
+  }
+
+  getUserCredentialsByEmail(email: string): MockUserRecord | undefined {
+    return this.users.find(
+      (candidate) => candidate.email.toLowerCase() === email.toLowerCase(),
+    );
+  }
+
+  getUserById(id: string): MockUserProfile | undefined {
+    const user = this.users.find((candidate) => candidate.id === id);
+
+    if (!user) {
+      return undefined;
+    }
+
+    const { password: _password, ...profile } = user;
+    return profile;
   }
 
   listActivities(): Activity[] {
