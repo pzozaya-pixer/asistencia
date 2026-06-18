@@ -7,7 +7,7 @@ import {
   clearSession,
   fetchSessionUser,
   getStoredAccessToken,
-  REFRESH_TOKEN_KEY,
+  getStoredRefreshToken,
   storeSession,
 } from "@/lib/auth";
 
@@ -41,7 +41,7 @@ export function DashboardAuthGate({
 
         storeSession({
           accessToken: token,
-          refreshToken: window.localStorage.getItem(REFRESH_TOKEN_KEY) ?? "",
+          refreshToken: getStoredRefreshToken() ?? "",
           user: sessionUser
         });
         setIsReady(true);

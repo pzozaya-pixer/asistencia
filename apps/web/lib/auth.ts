@@ -1,6 +1,7 @@
 export const ACCESS_TOKEN_KEY = "asistencia.access_token";
 export const REFRESH_TOKEN_KEY = "asistencia.refresh_token";
 export const USER_KEY = "asistencia.user";
+const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 export type SessionUser = {
   id: string;
@@ -25,19 +26,15 @@ export type AttendeeLookupResult = {
 };
 
 export function getStoredAccessToken() {
-  if (typeof window === "undefined") {
-    return null;
-  }
+  return getStorageItem(ACCESS_TOKEN_KEY);
+}
 
-  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
+export function getStoredRefreshToken() {
+  return getStorageItem(REFRESH_TOKEN_KEY);
 }
 
 export function getStoredUser() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const raw = window.localStorage.getItem(USER_KEY);
+  const raw = getStorageItem(USER_KEY);
 
   if (!raw) {
     return null;
@@ -52,19 +49,15 @@ export function getStoredUser() {
 }
 
 export function storeSession(session: LoginResponse) {
-  window.localStorage.setItem(ACCESS_TOKEN_KEY, session.accessToken);
-  window.localStorage.setItem(REFRESH_TOKEN_KEY, session.refreshToken);
-  window.localStorage.setItem(USER_KEY, JSON.stringify(session.user));
+  setStorageItem(ACCESS_TOKEN_KEY, session.accessToken);
+  setStorageItem(REFRESH_TOKEN_KEY, session.refreshToken);
+  setStorageItem(USER_KEY, JSON.stringify(session.user));
 }
 
 export function clearSession() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.removeItem(ACCESS_TOKEN_KEY);
-  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
-  window.localStorage.removeItem(USER_KEY);
+  removeStorageItem(ACCESS_TOKEN_KEY);
+  removeStorageItem(REFRESH_TOKEN_KEY);
+  removeStorageItem(USER_KEY);
 }
 
 export async function loginWithPassword(email: string, password: string) {
@@ -142,4 +135,74 @@ async function extractErrorMessage(response: Response) {
   } catch {}
 
   return "No se pudo completar la solicitud.";
+}
+
+function getStorageItem(key: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const localValue = safeLocalStorageGet(key);
+
+  if (localValue) {
+    return localValue;
+  }
+
+  return getCookieValue(key);
+}
+
+function setStorageItem(key: string, value: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  safeLocalStorageSet(key, value);
+  document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
+}
+
+function removeStorageItem(key: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  safeLocalStorageRemove(key);
+  document.cookie = `${key}=; path=/; max-age=0; samesite=lax`;
+}
+
+function safeLocalStorageGet(key: string) {
+  try {
+    return window.localStorage?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function safeLocalStorageSet(key: string, value: string) {
+  try {
+    window.localStorage?.setItem(key, value);
+  } catch {}
+}
+
+function safeLocalStorageRemove(key: string) {
+  try {
+    window.localStorage?.removeItem(key);
+  } catch {}
+}
+
+function getCookieValue(key: string) {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const cookies = document.cookie ? document.cookie.split("; ") : [];
+
+  for (const cookie of cookies) {
+    const [cookieKey, ...rest] = cookie.split("=");
+
+    if (cookieKey === key) {
+      return decodeURIComponent(rest.join("="));
+    }
+  }
+
+  return null;
 }
