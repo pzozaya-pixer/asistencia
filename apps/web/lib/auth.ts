@@ -1,7 +1,9 @@
 export const ACCESS_TOKEN_KEY = "asistencia.access_token";
 export const REFRESH_TOKEN_KEY = "asistencia.refresh_token";
 export const USER_KEY = "asistencia.user";
+const SESSION_KEYS = [ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY] as const;
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+const memoryStorage = new Map<string, string>();
 
 export type SessionUser = {
   id: string;
@@ -55,9 +57,9 @@ export function storeSession(session: LoginResponse) {
 }
 
 export function clearSession() {
-  removeStorageItem(ACCESS_TOKEN_KEY);
-  removeStorageItem(REFRESH_TOKEN_KEY);
-  removeStorageItem(USER_KEY);
+  for (const key of SESSION_KEYS) {
+    removeStorageItem(key);
+  }
 }
 
 export async function loginWithPassword(email: string, password: string) {
@@ -139,34 +141,46 @@ async function extractErrorMessage(response: Response) {
 
 function getStorageItem(key: string) {
   if (typeof window === "undefined") {
-    return null;
+    return memoryStorage.get(key) ?? null;
+  }
+
+  const cookieValue = getCookieValue(key);
+
+  if (cookieValue !== null) {
+    memoryStorage.set(key, cookieValue);
+    return cookieValue;
   }
 
   const localValue = safeLocalStorageGet(key);
 
-  if (localValue) {
+  if (localValue !== null) {
+    memoryStorage.set(key, localValue);
     return localValue;
   }
 
-  return getCookieValue(key);
+  return memoryStorage.get(key) ?? null;
 }
 
 function setStorageItem(key: string, value: string) {
+  memoryStorage.set(key, value);
+
   if (typeof window === "undefined") {
     return;
   }
 
   safeLocalStorageSet(key, value);
-  document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
+  document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(value)}; path=/; max-age=${COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
 }
 
 function removeStorageItem(key: string) {
+  memoryStorage.delete(key);
+
   if (typeof window === "undefined") {
     return;
   }
 
   safeLocalStorageRemove(key);
-  document.cookie = `${key}=; path=/; max-age=0; samesite=lax`;
+  document.cookie = `${encodeURIComponent(key)}=; path=/; max-age=0; samesite=lax`;
 }
 
 function safeLocalStorageGet(key: string) {
@@ -195,12 +209,17 @@ function getCookieValue(key: string) {
   }
 
   const cookies = document.cookie ? document.cookie.split("; ") : [];
+  const encodedKey = encodeURIComponent(key);
 
   for (const cookie of cookies) {
     const [cookieKey, ...rest] = cookie.split("=");
 
-    if (cookieKey === key) {
-      return decodeURIComponent(rest.join("="));
+    if (cookieKey === encodedKey) {
+      try {
+        return decodeURIComponent(rest.join("="));
+      } catch {
+        return rest.join("=");
+      }
     }
   }
 
