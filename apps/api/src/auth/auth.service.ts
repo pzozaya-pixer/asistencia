@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { Role } from '../common/enums/role.enum';
-import { MockStoreService, MockUserProfile } from '../store/mock-store.service';
+import { PasswordService } from '../crypto/password.service';
+import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AuthenticatedUser, TokenService } from './token.service';
@@ -8,42 +8,53 @@ import { AuthenticatedUser, TokenService } from './token.service';
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly store: MockStoreService,
+    private readonly usersService: UsersService,
+    private readonly passwordService: PasswordService,
     private readonly tokenService: TokenService,
   ) {}
 
-  login(payload: LoginDto) {
-    const user = this.store.getUserCredentialsByEmail(payload.email);
+  async login(payload: LoginDto) {
+    const user = await this.usersService.findByEmail(payload.email);
 
-    if (!user || user.password !== payload.password) {
+    if (
+      !user ||
+      !user.passwordHash ||
+      !user.active ||
+      !this.passwordService.verify(payload.password, user.passwordHash)
+    ) {
       throw new UnauthorizedException('Credenciales no validas.');
     }
 
     return this.buildSession(user);
   }
 
-  refresh(payload: RefreshTokenDto) {
+  async refresh(payload: RefreshTokenDto) {
     const sessionUser = this.tokenService.verifyRefreshToken(payload.refreshToken);
-    const user = this.store.getUserById(sessionUser.id);
+    const user = await this.usersService.findById(sessionUser.id);
 
-    if (!user) {
+    if (!user || !user.active) {
       throw new UnauthorizedException('El usuario ya no existe.');
     }
 
     return this.buildSession(user);
   }
 
-  me(user: AuthenticatedUser) {
-    const storedUser = this.store.getUserById(user.id);
+  async me(user: AuthenticatedUser) {
+    const storedUser = await this.usersService.findById(user.id);
 
-    if (!storedUser) {
+    if (!storedUser || !storedUser.active) {
       throw new UnauthorizedException('Sesion invalida.');
     }
 
     return storedUser;
   }
 
-  private buildSession(user: MockUserProfile) {
+  private buildSession(user: {
+    id: string;
+    email: string;
+    fullName: string;
+    role: AuthenticatedUser['role'];
+  }) {
     const sessionUser = this.toSessionUser(user);
 
     return {
@@ -53,12 +64,17 @@ export class AuthService {
     };
   }
 
-  private toSessionUser(user: MockUserProfile): AuthenticatedUser {
+  private toSessionUser(user: {
+    id: string;
+    email: string;
+    fullName: string;
+    role: AuthenticatedUser['role'];
+  }): AuthenticatedUser {
     return {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
-      role: user.role as Role,
+      role: user.role,
     };
   }
 }

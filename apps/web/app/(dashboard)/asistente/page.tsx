@@ -1,8 +1,7 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
-
-import { attendees } from "@/lib/mock-data";
+import { useDeferredValue, useEffect, useState } from "react";
+import { searchAttendees, type AttendeeLookupResult } from "@/lib/auth";
 import { formatLookupValue } from "@/lib/utils";
 
 import { PageHeader } from "@/components/page-header";
@@ -12,23 +11,72 @@ import { StatusBadge } from "@/components/status-badge";
 
 export default function AttendeePage() {
   const [query, setQuery] = useState("");
+  const [results, setResults] = useState<AttendeeLookupResult[]>([]);
+  const [selectedAttendeeId, setSelectedAttendeeId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
 
-  const results = useMemo(() => {
-    const normalized = deferredQuery.toLowerCase().replace(/\s+/g, "");
+  useEffect(() => {
+    let cancelled = false;
 
-    if (!normalized) {
-      return attendees.slice(0, 3);
+    async function loadResults() {
+      const trimmedQuery = deferredQuery.trim();
+
+      if (trimmedQuery.length > 0 && trimmedQuery.length < 5) {
+        setIsLoading(false);
+        setError(null);
+        setResults([]);
+        setSelectedAttendeeId(null);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const nextResults = await searchAttendees(trimmedQuery);
+
+        if (cancelled) {
+          return;
+        }
+
+        setResults(nextResults);
+        setSelectedAttendeeId((current) => {
+          if (current && nextResults.some((attendee) => attendee.id === current)) {
+            return current;
+          }
+
+          return nextResults[0]?.id ?? null;
+        });
+      } catch (loadError) {
+        if (cancelled) {
+          return;
+        }
+
+        setResults([]);
+        setSelectedAttendeeId(null);
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "No se pudo cargar la búsqueda."
+        );
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
     }
 
-    return attendees.filter((attendee) => {
-      return [attendee.dni, attendee.phone, attendee.name]
-        .map((value) => value.toLowerCase().replace(/\s+/g, ""))
-        .some((value) => value.includes(normalized));
-    });
+    void loadResults();
+
+    return () => {
+      cancelled = true;
+    };
   }, [deferredQuery]);
 
-  const selectedAttendee = results[0];
+  const selectedAttendee =
+    results.find((attendee) => attendee.id === selectedAttendeeId) ?? results[0];
 
   return (
     <main className="space-y-6">
@@ -40,7 +88,7 @@ export default function AttendeePage() {
 
       <SectionCard
         title="Buscar por DNI o teléfono"
-        description="Usa coincidencia parcial para simular una búsqueda rápida de acceso."
+        description="La búsqueda consulta asistentes reales del entorno y prepara el siguiente paso de QR temporal."
       >
         <div className="space-y-4">
           <SearchInput
@@ -48,30 +96,48 @@ export default function AttendeePage() {
             onChange={setQuery}
             placeholder="Ej. 12345678A o 600123456"
           />
+          {error ? (
+            <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {error}
+            </div>
+          ) : null}
+          {!isLoading &&
+          !error &&
+          deferredQuery.trim().length > 0 &&
+          deferredQuery.trim().length < 5 ? (
+            <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Escribe al menos 5 caracteres para buscar por DNI o teléfono.
+            </div>
+          ) : null}
           <div className="grid gap-3 lg:grid-cols-[0.95fr_1.05fr]">
             <div className="space-y-3">
+              {isLoading ? (
+                <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 p-6 text-sm text-slate-500">
+                  Cargando asistentes...
+                </div>
+              ) : null}
               {results.map((attendee) => (
                 <button
                   key={attendee.id}
                   type="button"
-                  onClick={() => setQuery(attendee.dni)}
+                  onClick={() => setSelectedAttendeeId(attendee.id)}
                   className="w-full rounded-[28px] border border-slate-200/70 bg-white/80 p-4 text-left transition hover:-translate-y-0.5 hover:border-signal/50 hover:shadow-panel"
                 >
                   <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="font-semibold text-ink">{attendee.name}</p>
-                    <StatusBadge tone={attendee.statusTone}>
-                      {attendee.statusLabel}
-                    </StatusBadge>
+                    <p className="font-semibold text-ink">
+                      {attendee.nombre} {attendee.apellidos}
+                    </p>
+                    <StatusBadge tone="success">Disponible</StatusBadge>
                   </div>
                   <p className="text-sm text-slate-500">
-                    DNI {formatLookupValue(attendee.dni)} · Tel.{" "}
-                    {formatLookupValue(attendee.phone)}
+                    DNI {formatLookupValue(attendee.dniNie)} · Tel.{" "}
+                    {formatLookupValue(attendee.telefono ?? "s/d")}
                   </p>
                 </button>
               ))}
-              {results.length === 0 ? (
+              {!isLoading && results.length === 0 ? (
                 <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 p-6 text-sm text-slate-500">
-                  No hay coincidencias en la demo actual.
+                  No hay coincidencias en la base actual.
                 </div>
               ) : null}
             </div>
@@ -92,9 +158,13 @@ export default function AttendeePage() {
               {selectedAttendee ? (
                 <div className="space-y-4">
                   <div className="rounded-[28px] border border-white/10 bg-white/5 p-4">
-                    <p className="text-lg font-semibold">{selectedAttendee.name}</p>
+                    <p className="text-lg font-semibold">
+                      {selectedAttendee.nombre} {selectedAttendee.apellidos}
+                    </p>
                     <p className="mt-1 text-sm text-slate-300">
-                      Acceso autorizado para sala principal
+                      {selectedAttendee.actividad
+                        ? `Actividad actual: ${selectedAttendee.actividad}`
+                        : "Sin actividad asociada en la demo actual"}
                     </p>
                   </div>
                   <div className="mx-auto flex aspect-square max-w-[260px] items-center justify-center rounded-[32px] border border-dashed border-cyan-200/30 bg-white p-5 text-slate-900">
@@ -112,8 +182,9 @@ export default function AttendeePage() {
                     </div>
                   </div>
                   <div className="rounded-[28px] border border-cyan-200/15 bg-cyan-300/10 p-4 text-sm text-cyan-50">
-                    Token visual de demostración. El backend real generará un QR
-                    firmado y de vida corta.
+                    Placeholder visual conectado a un asistente real. El
+                    siguiente paso es sustituirlo por un QR firmado y de vida
+                    corta desde backend.
                   </div>
                 </div>
               ) : (

@@ -16,6 +16,7 @@
     "@nestjs/platform-express": "11.1.3",
     "class-transformer": "0.5.1",
     "class-validator": "0.14.2",
+    "pg": "8.16.3",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"
   },
@@ -24,7 +25,7 @@
     "@nestjs/schematics": "11.0.3",
     "@nestjs/testing": "11.1.3",
     "@types/node": "22.15.30",
+    "@types/pg": "8.15.2",
     "typescript": "5.8.3"
   }
 }
-

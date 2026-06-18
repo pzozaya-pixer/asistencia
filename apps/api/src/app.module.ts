@@ -7,13 +7,17 @@ import { AttendeesModule } from './attendees/attendees.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { CryptoModule } from './crypto/crypto.module';
+import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
-import { StoreModule } from './store/store.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    StoreModule,
+    CryptoModule,
+    DatabaseModule,
+    UsersModule,
     HealthModule,
     AuthModule,
     ActivitiesModule,

@@ -15,6 +15,15 @@ export type LoginResponse = {
   user: SessionUser;
 };
 
+export type AttendeeLookupResult = {
+  id: string;
+  dniNie: string;
+  telefono?: string | null;
+  nombre: string;
+  apellidos: string;
+  actividad?: string | null;
+};
+
 export function getStoredAccessToken() {
   if (typeof window === "undefined") {
     return null;
@@ -76,12 +85,7 @@ export async function loginWithPassword(email: string, password: string) {
 }
 
 export async function fetchSessionUser(token: string) {
-  const response = await fetch("/api/auth/me", {
-    headers: {
-      Authorization: `Bearer ${token}`
-    },
-    cache: "no-store"
-  });
+  const response = await fetch("/api/auth/me", authorizedRequest(token));
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
@@ -89,6 +93,38 @@ export async function fetchSessionUser(token: string) {
   }
 
   return (await response.json()) as SessionUser;
+}
+
+export async function searchAttendees(query: string) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const url = new URL("/api/attendees", window.location.origin);
+
+  if (query.trim()) {
+    url.searchParams.set("q", query.trim());
+  }
+
+  const response = await fetch(url, authorizedRequest(token));
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as AttendeeLookupResult[];
+}
+
+function authorizedRequest(token: string): RequestInit {
+  return {
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store"
+  };
 }
 
 async function extractErrorMessage(response: Response) {

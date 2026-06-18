@@ -1,8 +1,13 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
+import { AuthenticatedUser } from '../auth/token.service';
 import { ActivitiesService } from './activities.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
+
+type RequestWithUser = {
+  user: AuthenticatedUser;
+};
 
 @Controller('activities')
 export class ActivitiesController {
@@ -16,7 +21,7 @@ export class ActivitiesController {
 
   @Post()
   @Roles(Role.SuperAdmin, Role.Responsable)
-  create(@Body() payload: CreateActivityDto) {
-    return this.activitiesService.create(payload);
+  create(@Body() payload: CreateActivityDto, @Req() request: RequestWithUser) {
+    return this.activitiesService.create(payload, request.user);
   }
 }
