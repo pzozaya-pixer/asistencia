@@ -14,7 +14,7 @@ export class DatabaseService implements OnModuleDestroy {
     });
   }
 
-  query<T extends QueryResultRow>(text: string, params: readonly unknown[] = []) {
+  query<T extends QueryResultRow>(text: string, params: unknown[] = []) {
     return this.pool.query<T>(text, params);
   }
 
