@@ -12,4 +12,4 @@ COPY apps/web ./apps/web
 WORKDIR /app/apps/web
 RUN pnpm build
 EXPOSE 3000
-CMD ["pnpm", "start", "--hostname", "0.0.0.0", "--port", "3000"]
+CMD ["./node_modules/.bin/next", "start", "--hostname", "0.0.0.0", "--port", "3000"]
