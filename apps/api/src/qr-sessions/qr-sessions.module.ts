@@ -8,5 +8,6 @@ import { QrSessionsService } from './qr-sessions.service';
   imports: [DatabaseModule, AuthModule],
   controllers: [QrSessionsController],
   providers: [QrSessionsService],
+  exports: [QrSessionsService],
 })
 export class QrSessionsModule {}
