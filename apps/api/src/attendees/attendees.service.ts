@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 
 type AttendeeRow = {
   id: string;
+  actividadId: string | null;
   dniNie: string;
   telefono: string | null;
   nombre: string;
@@ -20,6 +21,7 @@ export class AttendeesService {
       `
         select
           a.id,
+          act.id as "actividadId",
           a.dni_nie as "dniNie",
           a.telefono,
           a.nombre,

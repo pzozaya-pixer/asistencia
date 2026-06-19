@@ -20,6 +20,7 @@ export type LoginResponse = {
 
 export type AttendeeLookupResult = {
   id: string;
+  actividadId?: string | null;
   dniNie: string;
   telefono?: string | null;
   nombre: string;
@@ -111,6 +112,44 @@ export async function searchAttendees(query: string) {
   }
 
   return (await response.json()) as AttendeeLookupResult[];
+}
+
+export async function createAttendanceRecord(payload: {
+  actividadId: string;
+  asistenteId: string;
+  metodoRegistro: "qr" | "manual";
+  observaciones?: string;
+}) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch("/api/attendance", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as {
+    id: string;
+    actividadId: string;
+    asistenteId: string;
+    estado: string;
+    metodoRegistro: string;
+    fechaHora: string;
+    observaciones?: string | null;
+  };
 }
 
 function authorizedRequest(token: string): RequestInit {

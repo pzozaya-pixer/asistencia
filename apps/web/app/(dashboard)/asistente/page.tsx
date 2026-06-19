@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useDeferredValue, useEffect, useState } from "react";
 import { searchAttendees, type AttendeeLookupResult } from "@/lib/auth";
 import { formatLookupValue } from "@/lib/utils";
@@ -186,6 +187,16 @@ export default function AttendeePage() {
                     siguiente paso es sustituirlo por un QR firmado y de vida
                     corta desde backend.
                   </div>
+                  <Link
+                    href={
+                      selectedAttendee.actividadId
+                        ? `/validacion?asistenteId=${selectedAttendee.id}`
+                        : "/validacion"
+                    }
+                    className="flex w-full items-center justify-center rounded-full bg-white px-5 py-3.5 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:bg-slate-100"
+                  >
+                    Pasar a validación manual
+                  </Link>
                 </div>
               ) : (
                 <div className="rounded-[28px] border border-dashed border-white/20 p-8 text-sm text-slate-300">
