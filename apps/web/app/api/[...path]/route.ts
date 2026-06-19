@@ -1,9 +1,7 @@
 import { NextRequest } from "next/server";
 
 const backendBaseUrl =
-  process.env.API_INTERNAL_URL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  "http://asistencia-api:4000/api/v1";
+  process.env.API_INTERNAL_URL ?? "http://asistencia-api:4000/api/v1";
 
 type RouteContext = {
   params: Promise<{
