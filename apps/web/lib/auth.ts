@@ -28,6 +28,41 @@ export type AttendeeLookupResult = {
   actividad?: string | null;
 };
 
+export type DashboardSummary = {
+  activeActivity: {
+    id: string;
+    codigo: string;
+    nombre: string;
+    ubicacion?: string | null;
+  } | null;
+  metrics: Array<{
+    label: string;
+    value: string;
+    hint: string;
+    delta: string;
+    tone: "success" | "warning" | "info";
+  }>;
+  alerts: Array<{
+    title: string;
+    description: string;
+    tone: "success" | "warning" | "info";
+    label: string;
+  }>;
+  recentAccess: Array<{
+    id: string;
+    name: string;
+    time: string;
+    accessPoint: string;
+    mode: string;
+  }>;
+  validationQueue: Array<{
+    id: string;
+    activityId: string;
+    name: string;
+    reason: string;
+  }>;
+};
+
 export function getStoredAccessToken() {
   return getStorageItem(ACCESS_TOKEN_KEY);
 }
@@ -150,6 +185,23 @@ export async function createAttendanceRecord(payload: {
     fechaHora: string;
     observaciones?: string | null;
   };
+}
+
+export async function fetchDashboardSummary() {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch("/api/dashboard/summary", authorizedRequest(token));
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as DashboardSummary;
 }
 
 function authorizedRequest(token: string): RequestInit {
