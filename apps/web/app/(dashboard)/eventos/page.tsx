@@ -497,6 +497,9 @@ export default function ActivitiesPage() {
                     {formatDateRange(entry.fechaInicio, entry.fechaFin)}
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
+                    Duración: {entry.durationDays} día{entry.durationDays === 1 ? "" : "s"}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
                     {entry.ubicacion ?? "Ubicación pendiente"}
                     {entry.responsableNombre ? ` · ${entry.responsableNombre}` : ""}
                   </p>
@@ -788,6 +791,12 @@ export default function ActivitiesPage() {
                           ? `Último acceso: ${entry.metodoRegistro.toUpperCase()}`
                           : "Sin acceso registrado"}
                         {entry.fechaHora ? ` · ${formatDateTime(entry.fechaHora)}` : ""}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Días asistidos: {entry.attendanceDaysCount}
+                        {entry.attendanceDaysCount > 0
+                          ? ` · ${entry.attendanceDays.join(", ")}`
+                          : ""}
                       </p>
                       <p className="mt-1 text-sm text-slate-500">
                         {entry.hasPhoto ? "Foto cargada en MinIO" : "Sin fotografía subida"}

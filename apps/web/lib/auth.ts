@@ -126,6 +126,7 @@ export type ActivityRecord = {
   estado: "borrador" | "activa" | "finalizada" | "cancelada";
   responsableNombre?: string | null;
   responsableUserId?: string | null;
+  durationDays: number;
 };
 
 export type ActivityAttendeeRecord = {
@@ -141,6 +142,8 @@ export type ActivityAttendeeRecord = {
   attendanceStatus?: string | null;
   metodoRegistro?: string | null;
   fechaHora?: string | null;
+  attendanceDays: string[];
+  attendanceDaysCount: number;
 };
 
 export function getStoredAccessToken() {

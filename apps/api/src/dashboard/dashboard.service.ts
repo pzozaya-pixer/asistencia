@@ -14,6 +14,7 @@ type ActiveActivityRow = {
   codigo: string;
   nombre: string;
   ubicacion: string | null;
+  durationDays: number;
 };
 
 type RecentAccessRow = {
@@ -44,6 +45,8 @@ type ExportReportRow = {
   metodoRegistro: string | null;
   fechaHora: string | null;
   observaciones: string | null;
+  attendanceDays: string[];
+  attendanceDaysCount: number;
 };
 
 @Injectable()
@@ -57,7 +60,8 @@ export class DashboardService {
           id,
           codigo,
           nombre,
-          ubicacion
+          ubicacion,
+          ((fecha_fin::date - fecha_inicio::date) + 1)::int as "durationDays"
         from actividades
         where deleted_at is null
           and estado = 'activa'
@@ -96,6 +100,7 @@ export class DashboardService {
                 where ra.actividad_id = aa.actividad_id
                   and ra.asistente_id = aa.asistente_id
                   and ra.estado = 'validado'
+                  and timezone('Europe/Madrid', ra.fecha_hora)::date = timezone('Europe/Madrid', now())::date
               )
           ) as "pendientesValidacion",
           (
@@ -155,6 +160,7 @@ export class DashboardService {
                 where ra.actividad_id = aa.actividad_id
                   and ra.asistente_id = aa.asistente_id
                   and ra.estado = 'validado'
+                  and timezone('Europe/Madrid', ra.fecha_hora)::date = timezone('Europe/Madrid', now())::date
               )
             order by a.apellidos asc, a.nombre asc
             limit 5
@@ -202,7 +208,7 @@ export class DashboardService {
           label: 'Check-ins hoy',
           value: metrics.checkInsHoy,
           hint: activeActivity
-            ? `Actividad activa: ${activeActivity.nombre}`
+            ? `Actividad activa: ${activeActivity.nombre} · ${activeActivity.durationDays} día(s)`
             : 'Sin actividad activa en este momento',
           delta: `${metrics.checkInsHoy} validados`,
           tone: 'success' as const,
@@ -272,6 +278,7 @@ export class DashboardService {
       'Exportacion de asistencia',
       `${report.activity.codigo} - ${report.activity.nombre}`,
       report.activity.ubicacion ? `Ubicacion: ${report.activity.ubicacion}` : 'Ubicacion: Sin definir',
+      `Duracion: ${report.activity.durationDays} dia(s)`,
       `Generado: ${new Date().toLocaleString('es-ES')}`,
       `Total asistentes: ${report.rows.length}`,
       '',
@@ -280,6 +287,7 @@ export class DashboardService {
           `${index + 1}. ${row.nombre} ${row.apellidos}`,
           `DNI: ${row.dniNie} | Telefono: ${row.telefono ?? 's/d'}`,
           `Inscripcion: ${row.estadoInscripcion} | Asistencia: ${row.attendanceStatus ?? 'Pendiente'}`,
+          `Dias asistidos: ${row.attendanceDaysCount} | Fechas: ${row.attendanceDays.join(', ') || 'Sin asistencias'}`,
           `Metodo: ${row.metodoRegistro ?? 'Pendiente'} | Hora: ${row.fechaHora ? new Date(row.fechaHora).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : 's/r'}`,
           `Observaciones: ${row.observaciones ?? '-'}`,
           '',
@@ -301,7 +309,8 @@ export class DashboardService {
           id,
           codigo,
           nombre,
-          ubicacion
+          ubicacion,
+          ((fecha_fin::date - fecha_inicio::date) + 1)::int as "durationDays"
         from actividades
         where deleted_at is null
           and estado = 'activa'
@@ -328,6 +337,19 @@ export class DashboardService {
           from registros_asistencia ra
           where ra.actividad_id = $1
           order by ra.asistente_id, ra.fecha_hora desc
+        ),
+        attendance_days as (
+          select
+            ra.asistente_id,
+            array_agg(
+              distinct to_char(timezone('Europe/Madrid', ra.fecha_hora)::date, 'YYYY-MM-DD')
+              order by to_char(timezone('Europe/Madrid', ra.fecha_hora)::date, 'YYYY-MM-DD')
+            ) as dias,
+            count(distinct timezone('Europe/Madrid', ra.fecha_hora)::date)::int as total_dias
+          from registros_asistencia ra
+          where ra.actividad_id = $1
+            and ra.estado = 'validado'
+          group by ra.asistente_id
         )
         select
           a.id as "attendeeId",
@@ -339,10 +361,13 @@ export class DashboardService {
           la.estado as "attendanceStatus",
           la.metodo_registro as "metodoRegistro",
           la.fecha_hora as "fechaHora",
-          la.observaciones
+          la.observaciones,
+          coalesce(ad.dias, array[]::text[]) as "attendanceDays",
+          coalesce(ad.total_dias, 0)::int as "attendanceDaysCount"
         from actividad_asistentes aa
         join asistentes a on a.id = aa.asistente_id
         left join latest_attendance la on la.asistente_id = aa.asistente_id
+        left join attendance_days ad on ad.asistente_id = aa.asistente_id
         where aa.actividad_id = $1
         order by a.apellidos asc, a.nombre asc
       `,
@@ -362,9 +387,10 @@ export class DashboardService {
     const worksheetRows = [
       ['Actividad', `${report.activity.codigo} - ${report.activity.nombre}`],
       ['Ubicacion', report.activity.ubicacion ?? 'Sin definir'],
+      ['Duracion (dias)', report.activity.durationDays],
       ['Generado', new Date().toLocaleString('es-ES')],
       [],
-      ['DNI/NIE', 'Nombre', 'Apellidos', 'Telefono', 'Inscripcion', 'Asistencia', 'Metodo', 'Hora', 'Observaciones'],
+      ['DNI/NIE', 'Nombre', 'Apellidos', 'Telefono', 'Inscripcion', 'Asistencia', 'Dias asistidos', 'Fechas asistencia', 'Metodo', 'Hora', 'Observaciones'],
       ...report.rows.map((row) => [
         row.dniNie,
         row.nombre,
@@ -372,6 +398,8 @@ export class DashboardService {
         row.telefono ?? '',
         row.estadoInscripcion,
         row.attendanceStatus ?? 'Pendiente',
+        row.attendanceDaysCount,
+        row.attendanceDays.join(', '),
         row.metodoRegistro ?? 'Pendiente',
         row.fechaHora
           ? new Date(row.fechaHora).toLocaleString('es-ES', {
@@ -395,6 +423,8 @@ export class DashboardService {
       { wch: 14 },
       { wch: 14 },
       { wch: 14 },
+      { wch: 12 },
+      { wch: 24 },
       { wch: 12 },
       { wch: 22 },
       { wch: 28 },

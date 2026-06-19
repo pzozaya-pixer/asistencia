@@ -34,6 +34,11 @@ export class AttendanceService {
     const responsableId = await this.usersService.findResponsableIdByUserId(user.id);
     return this.database.withTransaction(async (client) => {
       const firmaId = await this.createInlineSignature(client, payload.firma);
+      const status = await this.resolveDailyStatus(
+        client,
+        payload.actividadId,
+        payload.asistenteId,
+      );
       const hash = createHash('sha256')
         .update(
           [
@@ -42,6 +47,7 @@ export class AttendanceService {
             payload.metodoRegistro,
             payload.observaciones ?? '',
             firmaId,
+            status,
             Date.now().toString(),
           ].join(':'),
         )
@@ -55,7 +61,7 @@ export class AttendanceService {
           )
           values (
             $1, $2, $3, $4, $5, $6,
-            'validado', $7, $8
+            $7, $8, $9
           )
           returning
             id,
@@ -74,7 +80,9 @@ export class AttendanceService {
           responsableId ?? null,
           firmaId,
           payload.metodoRegistro,
-          payload.observaciones ?? null,
+          status,
+          payload.observaciones ??
+            (status === 'duplicado' ? 'Intento duplicado en el mismo día.' : null),
           hash,
         ],
       );
@@ -110,6 +118,11 @@ export class AttendanceService {
 
     return this.database.withTransaction(async (client) => {
       const firmaId = await this.createInlineSignature(client, payload.firma);
+      const status = await this.resolveDailyStatus(
+        client,
+        session.activityId,
+        session.attendeeId,
+      );
       const hash = createHash('sha256')
         .update(
           [
@@ -119,6 +132,7 @@ export class AttendanceService {
             payload.observaciones ?? '',
             session.sessionId,
             firmaId,
+            status,
             Date.now().toString(),
           ].join(':'),
         )
@@ -132,7 +146,7 @@ export class AttendanceService {
           )
           values (
             $1, $2, $3, $4, $5, 'qr',
-            'validado', $6, $7, $8
+            $6, $7, $8, $9
           )
           returning
             id,
@@ -150,7 +164,11 @@ export class AttendanceService {
           session.attendeeId,
           responsableId ?? null,
           firmaId,
-          payload.observaciones ?? 'Validación por escaneo QR desde panel responsable.',
+          status,
+          payload.observaciones ??
+            (status === 'duplicado'
+              ? 'Intento duplicado en el mismo día por QR.'
+              : 'Validación por escaneo QR desde panel responsable.'),
           hash,
           session.sessionId,
         ],
@@ -176,6 +194,28 @@ export class AttendanceService {
         'Debes completar la validación visual antes de confirmar la asistencia.',
       );
     }
+  }
+
+  private async resolveDailyStatus(
+    client: PoolClient,
+    activityId: string,
+    attendeeId: string,
+  ) {
+    const duplicateCheck = await client.query<{ exists: boolean }>(
+      `
+        select exists(
+          select 1
+          from registros_asistencia
+          where actividad_id = $1
+            and asistente_id = $2
+            and estado = 'validado'
+            and timezone('Europe/Madrid', fecha_hora)::date = timezone('Europe/Madrid', now())::date
+        ) as exists
+      `,
+      [activityId, attendeeId],
+    );
+
+    return duplicateCheck.rows[0]?.exists ? 'duplicado' : 'validado';
   }
 
   private async createInlineSignature(

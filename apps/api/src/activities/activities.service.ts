@@ -32,6 +32,7 @@ type ActivityRow = {
   estado: string;
   responsableNombre: string | null;
   responsableUserId: string | null;
+  durationDays: number;
 };
 
 type ActivityAttendeeRow = {
@@ -47,6 +48,8 @@ type ActivityAttendeeRow = {
   attendanceStatus: string | null;
   metodoRegistro: string | null;
   fechaHora: string | null;
+  attendanceDays: string[];
+  attendanceDaysCount: number;
 };
 
 @Injectable()
@@ -70,7 +73,8 @@ export class ActivitiesService {
           a.aforo,
           a.estado,
           concat_ws(' ', u.nombre, u.apellidos) as "responsableNombre",
-          u.id as "responsableUserId"
+          u.id as "responsableUserId",
+          ((a.fecha_fin::date - a.fecha_inicio::date) + 1)::int as "durationDays"
         from actividades a
         left join responsables r on r.id = a.responsable_id
         left join usuarios u on u.id = r.usuario_id
@@ -110,7 +114,8 @@ export class ActivitiesService {
             aforo,
             estado,
             null::text as "responsableNombre",
-            null::text as "responsableUserId"
+            null::text as "responsableUserId",
+            (($6::date - $5::date) + 1)::int as "durationDays"
         `,
         [
           randomUUID(),
@@ -173,7 +178,8 @@ export class ActivitiesService {
             aforo,
             estado,
             null::text as "responsableNombre",
-            null::text as "responsableUserId"
+            null::text as "responsableUserId",
+            (($6::date - $5::date) + 1)::int as "durationDays"
         `,
         [
           id,
@@ -217,6 +223,19 @@ export class ActivitiesService {
           from registros_asistencia ra
           where ra.actividad_id = $1
           order by ra.asistente_id, ra.fecha_hora desc
+        ),
+        attendance_days as (
+          select
+            ra.asistente_id,
+            array_agg(
+              distinct to_char(timezone('Europe/Madrid', ra.fecha_hora)::date, 'YYYY-MM-DD')
+              order by to_char(timezone('Europe/Madrid', ra.fecha_hora)::date, 'YYYY-MM-DD')
+            ) as dias,
+            count(distinct timezone('Europe/Madrid', ra.fecha_hora)::date)::int as total_dias
+          from registros_asistencia ra
+          where ra.actividad_id = $1
+            and ra.estado = 'validado'
+          group by ra.asistente_id
         )
         select
           a.id as "attendeeId",
@@ -230,10 +249,13 @@ export class ActivitiesService {
           aa.observaciones,
           la.estado as "attendanceStatus",
           la.metodo_registro as "metodoRegistro",
-          la.fecha_hora as "fechaHora"
+          la.fecha_hora as "fechaHora",
+          coalesce(ad.dias, array[]::text[]) as "attendanceDays",
+          coalesce(ad.total_dias, 0)::int as "attendanceDaysCount"
         from actividad_asistentes aa
         join asistentes a on a.id = aa.asistente_id
         left join latest_attendance la on la.asistente_id = aa.asistente_id
+        left join attendance_days ad on ad.asistente_id = aa.asistente_id
         where aa.actividad_id = $1
           and a.deleted_at is null
         order by a.apellidos asc, a.nombre asc
@@ -499,7 +521,8 @@ export class ActivitiesService {
           a.aforo,
           a.estado,
           concat_ws(' ', u.nombre, u.apellidos) as "responsableNombre",
-          u.id as "responsableUserId"
+          u.id as "responsableUserId",
+          ((a.fecha_fin::date - a.fecha_inicio::date) + 1)::int as "durationDays"
         from actividades a
         left join responsables r on r.id = a.responsable_id
         left join usuarios u on u.id = r.usuario_id
@@ -556,6 +579,19 @@ export class ActivitiesService {
           from registros_asistencia ra
           where ra.actividad_id = $1
           order by ra.asistente_id, ra.fecha_hora desc
+        ),
+        attendance_days as (
+          select
+            ra.asistente_id,
+            array_agg(
+              distinct to_char(timezone('Europe/Madrid', ra.fecha_hora)::date, 'YYYY-MM-DD')
+              order by to_char(timezone('Europe/Madrid', ra.fecha_hora)::date, 'YYYY-MM-DD')
+            ) as dias,
+            count(distinct timezone('Europe/Madrid', ra.fecha_hora)::date)::int as total_dias
+          from registros_asistencia ra
+          where ra.actividad_id = $1
+            and ra.estado = 'validado'
+          group by ra.asistente_id
         )
         select
           a.id as "attendeeId",
@@ -569,10 +605,13 @@ export class ActivitiesService {
           aa.observaciones,
           la.estado as "attendanceStatus",
           la.metodo_registro as "metodoRegistro",
-          la.fecha_hora as "fechaHora"
+          la.fecha_hora as "fechaHora",
+          coalesce(ad.dias, array[]::text[]) as "attendanceDays",
+          coalesce(ad.total_dias, 0)::int as "attendanceDaysCount"
         from actividad_asistentes aa
         join asistentes a on a.id = aa.asistente_id
         left join latest_attendance la on la.asistente_id = aa.asistente_id
+        left join attendance_days ad on ad.asistente_id = aa.asistente_id
         where aa.actividad_id = $1
           and a.deleted_at is null
         order by a.apellidos asc, a.nombre asc
