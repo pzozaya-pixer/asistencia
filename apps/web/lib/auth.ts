@@ -249,6 +249,28 @@ export async function fetchDashboardSummary() {
   return (await response.json()) as DashboardSummary;
 }
 
+export async function downloadDashboardExport(format: "excel" | "pdf") {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch(`/api/dashboard/export/${format}`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return response.blob();
+}
+
 export async function createQrSession(payload: {
   attendeeId: string;
   activityId: string;

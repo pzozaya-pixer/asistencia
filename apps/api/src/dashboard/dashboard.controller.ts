@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Res } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { DashboardService } from './dashboard.service';
@@ -11,5 +11,23 @@ export class DashboardController {
   @Roles(Role.SuperAdmin, Role.Responsable, Role.OperadorLectura)
   getSummary() {
     return this.dashboardService.getSummary();
+  }
+
+  @Get('export/excel')
+  @Roles(Role.SuperAdmin, Role.Responsable, Role.OperadorLectura)
+  async exportExcel(@Res() response: any) {
+    const file = await this.dashboardService.exportActiveActivityExcel();
+    response.setHeader('Content-Type', file.contentType);
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    response.send(file.buffer);
+  }
+
+  @Get('export/pdf')
+  @Roles(Role.SuperAdmin, Role.Responsable, Role.OperadorLectura)
+  async exportPdf(@Res() response: any) {
+    const file = await this.dashboardService.exportActiveActivityPdf();
+    response.setHeader('Content-Type', file.contentType);
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    response.send(file.buffer);
   }
 }

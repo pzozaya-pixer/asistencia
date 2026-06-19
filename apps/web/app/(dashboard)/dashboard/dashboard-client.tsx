@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { fetchDashboardSummary, type DashboardSummary } from "@/lib/auth";
+import {
+  downloadDashboardExport,
+  fetchDashboardSummary,
+  type DashboardSummary
+} from "@/lib/auth";
 
 import { ActionCard } from "@/components/action-card";
 import { MetricCard } from "@/components/metric-card";
@@ -13,6 +17,7 @@ import { StatusBadge } from "@/components/status-badge";
 export function DashboardClient() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState<null | "excel" | "pdf">(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,6 +55,32 @@ export function DashboardClient() {
     };
   }, []);
 
+  async function handleExport(format: "excel" | "pdf") {
+    setIsExporting(format);
+    setError(null);
+
+    try {
+      const blob = await downloadDashboardExport(format);
+      const extension = format === "excel" ? "xls" : "pdf";
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = `actividad-activa-asistencia.${extension}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "No se pudo generar la exportación."
+      );
+    } finally {
+      setIsExporting(null);
+    }
+  }
+
   return (
     <main className="space-y-6">
       <section className="space-y-4">
@@ -62,9 +93,27 @@ export function DashboardClient() {
               Dashboard administrativo
             </h1>
           </div>
-          <StatusBadge tone={summary?.activeActivity ? "success" : "warning"}>
-            {summary?.activeActivity ? "Evento activo" : "Sin evento activo"}
-          </StatusBadge>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => void handleExport("excel")}
+              disabled={!summary?.activeActivity || isExporting !== null}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isExporting === "excel" ? "Generando Excel..." : "Exportar Excel"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleExport("pdf")}
+              disabled={!summary?.activeActivity || isExporting !== null}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-coral hover:text-coral disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isExporting === "pdf" ? "Generando PDF..." : "Exportar PDF"}
+            </button>
+            <StatusBadge tone={summary?.activeActivity ? "success" : "warning"}>
+              {summary?.activeActivity ? "Evento activo" : "Sin evento activo"}
+            </StatusBadge>
+          </div>
         </div>
 
         {summary?.activeActivity ? (
@@ -108,7 +157,7 @@ export function DashboardClient() {
           title="Acciones rápidas"
           description="Atajos para los flujos que se usan en acceso y validación."
         >
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <ActionCard
               href="/asistente"
               title="Buscar asistente"
@@ -121,6 +170,32 @@ export function DashboardClient() {
               description="Registra validaciones manuales reales contra el backend operativo."
               accent="coral"
             />
+            <button
+              type="button"
+              onClick={() => void handleExport("excel")}
+              disabled={!summary?.activeActivity || isExporting !== null}
+              className="rounded-[30px] border border-cyan-200 bg-cyan-50/80 p-5 text-left transition hover:-translate-y-1 hover:shadow-panel disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <p className="mb-2 font-[family:var(--font-heading)] text-2xl font-bold text-ink">
+                Excel
+              </p>
+              <p className="text-sm leading-6 text-slate-600">
+                Descarga la relación de asistentes y estado de acceso de la actividad activa.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleExport("pdf")}
+              disabled={!summary?.activeActivity || isExporting !== null}
+              className="rounded-[30px] border border-rose-200 bg-rose-50/80 p-5 text-left transition hover:-translate-y-1 hover:shadow-panel disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <p className="mb-2 font-[family:var(--font-heading)] text-2xl font-bold text-ink">
+                PDF
+              </p>
+              <p className="text-sm leading-6 text-slate-600">
+                Genera un resumen imprimible con la actividad activa y el detalle de asistencia.
+              </p>
+            </button>
           </div>
         </SectionCard>
 

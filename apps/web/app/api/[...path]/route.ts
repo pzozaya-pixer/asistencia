@@ -91,9 +91,14 @@ function buildHeaders(request: NextRequest) {
 function filterHeaders(headers: Headers) {
   const nextHeaders = new Headers();
   const contentType = headers.get("content-type");
+  const contentDisposition = headers.get("content-disposition");
 
   if (contentType) {
     nextHeaders.set("content-type", contentType);
+  }
+
+  if (contentDisposition) {
+    nextHeaders.set("content-disposition", contentDisposition);
   }
 
   return nextHeaders;
