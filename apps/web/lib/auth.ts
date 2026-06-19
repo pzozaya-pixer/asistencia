@@ -46,6 +46,24 @@ export type QrSessionResponse = {
   activityName: string;
 };
 
+export type ResolvedQrSession = {
+  sessionId: string;
+  token: string;
+  attendee: {
+    id: string;
+    nombre: string;
+    apellidos: string;
+    dniNie: string;
+  };
+  activity: {
+    id: string;
+    codigo: string;
+    nombre: string;
+  };
+  expiresAt: string;
+  status: "ready";
+};
+
 export type DashboardSummary = {
   activeActivity: {
     id: string;
@@ -249,6 +267,67 @@ export async function createQrSession(payload: {
   }
 
   return (await response.json()) as QrSessionResponse;
+}
+
+export async function resolveQrSession(tokenValue: string) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch("/api/qr-sessions/resolve", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify({ token: tokenValue })
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ResolvedQrSession;
+}
+
+export async function consumeQrAttendance(payload: {
+  token: string;
+  observaciones?: string;
+}) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch("/api/attendance/qr", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as {
+    id: string;
+    actividadId: string;
+    asistenteId: string;
+    estado: string;
+    metodoRegistro: string;
+    fechaHora: string;
+    observaciones?: string | null;
+  };
 }
 
 function authorizedRequest(token: string): RequestInit {

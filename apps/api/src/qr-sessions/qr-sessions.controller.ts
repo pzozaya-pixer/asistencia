@@ -2,6 +2,7 @@ import { Body, Controller, Post, Req } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { CreateQrSessionDto } from './dto/create-qr-session.dto';
+import { ResolveQrSessionDto } from './dto/resolve-qr-session.dto';
 import { QrSessionsService } from './qr-sessions.service';
 
 type RequestWithMetadata = {
@@ -25,5 +26,11 @@ export class QrSessionsController {
       ipAddress: request.ip ?? null,
       device: userAgent ?? null,
     });
+  }
+
+  @Post('resolve')
+  @Roles(Role.SuperAdmin, Role.Responsable, Role.OperadorLectura)
+  resolve(@Body() payload: ResolveQrSessionDto) {
+    return this.qrSessionsService.resolve(payload.token);
   }
 }

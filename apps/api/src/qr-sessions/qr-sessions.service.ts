@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,6 +15,19 @@ type ActivityLinkRow = {
   activityCode: string;
   activityName: string;
   attendeeName: string;
+};
+
+type QrSessionLookupRow = {
+  sessionId: string;
+  attendeeId: string;
+  activityId: string;
+  activityCode: string;
+  activityName: string;
+  attendeeName: string;
+  attendeeLastName: string;
+  attendeeDocument: string;
+  used: boolean;
+  expiresAt: string;
 };
 
 @Injectable()
@@ -95,6 +109,64 @@ export class QrSessionsService {
     };
   }
 
+  async resolve(token: string) {
+    const payload = this.tokenService.verifyQrToken(token);
+    const session = await this.findSession(payload.sid, token);
+
+    if (!session) {
+      throw new NotFoundException('La sesión QR indicada ya no existe.');
+    }
+
+    const isExpired = new Date(session.expiresAt).getTime() <= Date.now();
+
+    if (isExpired) {
+      throw new ConflictException('El QR temporal ha caducado.');
+    }
+
+    if (session.used) {
+      throw new ConflictException('El QR temporal ya fue consumido.');
+    }
+
+    return {
+      sessionId: session.sessionId,
+      token,
+      attendee: {
+        id: session.attendeeId,
+        nombre: session.attendeeName,
+        apellidos: session.attendeeLastName,
+        dniNie: session.attendeeDocument,
+      },
+      activity: {
+        id: session.activityId,
+        codigo: session.activityCode,
+        nombre: session.activityName,
+      },
+      expiresAt: session.expiresAt,
+      status: 'ready' as const,
+    };
+  }
+
+  async consume(token: string) {
+    const payload = this.tokenService.verifyQrToken(token);
+    const session = await this.findSession(payload.sid, token);
+
+    if (!session) {
+      throw new NotFoundException('La sesión QR indicada ya no existe.');
+    }
+
+    const isExpired = new Date(session.expiresAt).getTime() <= Date.now();
+
+    if (isExpired) {
+      throw new ConflictException('El QR temporal ha caducado.');
+    }
+
+    if (session.used) {
+      throw new ConflictException('El QR temporal ya fue consumido.');
+    }
+
+    return session;
+  }
+
   private async findAttendeeActivityRelation(
     attendeeId: string,
     activityId: string,
@@ -119,6 +191,33 @@ export class QrSessionsService {
         limit 1
       `,
       [attendeeId, activityId],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  private async findSession(sessionId: string, token: string) {
+    const result = await this.database.query<QrSessionLookupRow>(
+      `
+        select
+          sq.id as "sessionId",
+          sq.asistente_id as "attendeeId",
+          sq.actividad_id as "activityId",
+          sq.usado as "used",
+          sq.expira_at as "expiresAt",
+          act.codigo as "activityCode",
+          act.nombre as "activityName",
+          a.nombre as "attendeeName",
+          a.apellidos as "attendeeLastName",
+          a.dni_nie as "attendeeDocument"
+        from sesiones_qr sq
+        inner join asistentes a on a.id = sq.asistente_id
+        inner join actividades act on act.id = sq.actividad_id
+        where sq.id = $1
+          and sq.token = $2
+        limit 1
+      `,
+      [sessionId, token],
     );
 
     return result.rows[0] ?? null;
