@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import {
   downloadDashboardExport,
   fetchDashboardSummary,
+  getStoredUser,
+  type SessionUser,
   type DashboardSummary
 } from "@/lib/auth";
 
@@ -15,10 +17,15 @@ import { SectionCard } from "@/components/section-card";
 import { StatusBadge } from "@/components/status-badge";
 
 export function DashboardClient() {
+  const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState<null | "excel" | "pdf">(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCurrentUser(getStoredUser());
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,7 +164,25 @@ export function DashboardClient() {
           title="Acciones rápidas"
           description="Atajos para los flujos que se usan en acceso y validación."
         >
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div
+            className={`grid gap-3 sm:grid-cols-2 ${
+              currentUser?.role === "super_admin" ? "xl:grid-cols-6" : "xl:grid-cols-5"
+            }`}
+          >
+            <ActionCard
+              href="/eventos"
+              title="Eventos"
+              description="Gestiona altas, estados, fechas y responsables de las actividades."
+              accent="signal"
+            />
+            {currentUser?.role === "super_admin" ? (
+              <ActionCard
+                href="/usuarios"
+                title="Usuarios"
+                description="Administra accesos internos, roles y activaciones del equipo."
+                accent="coral"
+              />
+            ) : null}
             <ActionCard
               href="/asistente"
               title="Buscar asistente"

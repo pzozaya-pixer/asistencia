@@ -4,32 +4,30 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  Min
-} from "class-validator";
+  Min,
+} from 'class-validator';
+import { ActivityStatus } from './create-activity.dto';
 
-export enum ActivityStatus {
-  Draft = "borrador",
-  Active = "activa",
-  Finished = "finalizada",
-  Cancelled = "cancelada"
-}
-
-export class CreateActivityDto {
+export class UpdateActivityDto {
+  @IsOptional()
   @IsString()
-  codigo!: string;
+  codigo?: string;
 
+  @IsOptional()
   @IsString()
-  nombre!: string;
+  nombre?: string;
 
   @IsOptional()
   @IsString()
   descripcion?: string;
 
+  @IsOptional()
   @IsDateString()
-  fechaInicio!: string;
+  fechaInicio?: string;
 
+  @IsOptional()
   @IsDateString()
-  fechaFin!: string;
+  fechaFin?: string;
 
   @IsOptional()
   @IsString()

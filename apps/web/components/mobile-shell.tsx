@@ -8,15 +8,18 @@ import { clearSession, getStoredUser, type SessionUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/asistente", label: "Asistente" },
-  { href: "/validacion", label: "Validación" }
+  { href: "/dashboard", label: "Dashboard", roles: ["super_admin", "responsable", "operador_lectura"] },
+  { href: "/eventos", label: "Eventos", roles: ["super_admin", "responsable"] },
+  { href: "/usuarios", label: "Usuarios", roles: ["super_admin"] },
+  { href: "/asistente", label: "Asistente", roles: ["super_admin", "responsable", "operador_lectura"] },
+  { href: "/validacion", label: "Validación", roles: ["super_admin", "responsable", "operador_lectura"] }
 ];
 
 export function MobileShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<SessionUser | null>(null);
+  const visibleNavItems = navItems.filter((item) => (user ? item.roles.includes(user.role) : false));
 
   useEffect(() => {
     setUser(getStoredUser());
@@ -54,8 +57,8 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
             ) : null}
           </div>
           <div className="space-y-2">
-            <div className="grid grid-cols-3 gap-2 rounded-[28px] bg-white/5 p-2">
-              {navItems.map((item) => (
+            <div className="grid gap-2 rounded-[28px] bg-white/5 p-2 sm:grid-cols-3">
+              {visibleNavItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}

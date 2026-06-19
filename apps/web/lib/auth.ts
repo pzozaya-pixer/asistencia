@@ -102,6 +102,31 @@ export type DashboardSummary = {
   }>;
 };
 
+export type ManagedUser = {
+  id: string;
+  email: string;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  role: SessionUser["role"];
+  active: boolean;
+  phone?: string | null;
+};
+
+export type ActivityRecord = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  descripcion?: string | null;
+  fechaInicio: string;
+  fechaFin: string;
+  ubicacion?: string | null;
+  aforo?: number | null;
+  estado: "borrador" | "activa" | "finalizada" | "cancelada";
+  responsableNombre?: string | null;
+  responsableUserId?: string | null;
+};
+
 export function getStoredAccessToken() {
   return getStorageItem(ACCESS_TOKEN_KEY);
 }
@@ -269,6 +294,199 @@ export async function downloadDashboardExport(format: "excel" | "pdf") {
   }
 
   return response.blob();
+}
+
+export async function fetchUsers() {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch("/api/users", authorizedRequest(token));
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ManagedUser[];
+}
+
+export async function fetchResponsables() {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch("/api/users/responsables", authorizedRequest(token));
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ManagedUser[];
+}
+
+export async function createUser(payload: {
+  nombre: string;
+  apellidos: string;
+  email: string;
+  telefono?: string;
+  role: SessionUser["role"];
+  activo?: boolean;
+  password: string;
+}) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch("/api/users", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ManagedUser;
+}
+
+export async function updateUser(
+  userId: string,
+  payload: Partial<{
+    nombre: string;
+    apellidos: string;
+    email: string;
+    telefono: string;
+    role: SessionUser["role"];
+    activo: boolean;
+    password: string;
+  }>
+) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch(`/api/users/${userId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ManagedUser;
+}
+
+export async function fetchActivities() {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch("/api/activities", authorizedRequest(token));
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ActivityRecord[];
+}
+
+export async function createActivity(payload: {
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  fechaInicio: string;
+  fechaFin: string;
+  ubicacion?: string;
+  aforo?: number;
+  estado?: ActivityRecord["estado"];
+  responsableUserId?: string;
+}) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch("/api/activities", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ActivityRecord;
+}
+
+export async function updateActivity(
+  activityId: string,
+  payload: Partial<{
+    codigo: string;
+    nombre: string;
+    descripcion: string;
+    fechaInicio: string;
+    fechaFin: string;
+    ubicacion: string;
+    aforo: number;
+    estado: ActivityRecord["estado"];
+    responsableUserId: string;
+  }>
+) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch(`/api/activities/${activityId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ActivityRecord;
 }
 
 export async function createQrSession(payload: {
