@@ -116,7 +116,6 @@ export class QrSessionsService {
           and act.id = $2
           and a.deleted_at is null
           and act.deleted_at is null
-          and aa.deleted_at is null
         limit 1
       `,
       [attendeeId, activityId],
