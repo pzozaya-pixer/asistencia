@@ -41,6 +41,7 @@ type ActivityAttendeeRow = {
   apellidos: string;
   telefono: string | null;
   email: string | null;
+  hasPhoto: boolean;
   estado: ActivityAttendeeState;
   observaciones: string | null;
   attendanceStatus: string | null;
@@ -224,6 +225,7 @@ export class ActivitiesService {
           a.apellidos,
           a.telefono,
           a.email,
+          (a.foto_archivo_id is not null) as "hasPhoto",
           aa.estado,
           aa.observaciones,
           la.estado as "attendanceStatus",
@@ -562,6 +564,7 @@ export class ActivitiesService {
           a.apellidos,
           a.telefono,
           a.email,
+          (a.foto_archivo_id is not null) as "hasPhoto",
           aa.estado,
           aa.observaciones,
           la.estado as "attendanceStatus",

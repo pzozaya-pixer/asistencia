@@ -4,6 +4,7 @@ import { PoolClient } from 'pg';
 import { AuthenticatedUser } from '../auth/token.service';
 import { DatabaseService } from '../database/database.service';
 import { QrSessionsService } from '../qr-sessions/qr-sessions.service';
+import { StorageService } from '../storage/storage.service';
 import { UsersService } from '../users/users.service';
 import { ConsumeQrAttendanceDto } from './dto/consume-qr-attendance.dto';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
@@ -25,6 +26,7 @@ export class AttendanceService {
     private readonly database: DatabaseService,
     private readonly usersService: UsersService,
     private readonly qrSessionsService: QrSessionsService,
+    private readonly storageService: StorageService,
   ) {}
 
   async create(payload: CreateAttendanceDto, user: AuthenticatedUser) {
@@ -188,16 +190,47 @@ export class AttendanceService {
       throw new BadRequestException('La firma debe enviarse como PNG en base64.');
     }
 
+    const signatureBuffer = Buffer.from(
+      firma.dataUrl.replace('data:image/png;base64,', ''),
+      'base64',
+    );
     const hash = createHash('sha256').update(firma.dataUrl).digest('hex');
+    const uploaded = await this.storageService.uploadObject({
+      bucket: process.env.MINIO_BUCKET_SIGNATURES ?? 'firmas',
+      originalName: `signature-${randomUUID()}.png`,
+      mimeType: 'image/png',
+      buffer: signatureBuffer,
+      prefix: 'signatures',
+    });
+    const fileId = randomUUID();
+
+    await client.query(
+      `
+        insert into archivos (
+          id, bucket, ruta, nombre_original, mime_type, tamano, checksum, privado, uploaded_by
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, true, null)
+      `,
+      [
+        fileId,
+        uploaded.bucket,
+        uploaded.objectName,
+        'signature.png',
+        'image/png',
+        uploaded.size,
+        uploaded.checksum,
+      ],
+    );
+
     const result = await client.query<{ id: string }>(
       `
         insert into firmas (
           id, archivo_id, formato, ancho, alto, hash_firma, data_url
         )
-        values ($1, null, 'image/png', $2, $3, $4, $5)
+        values ($1, $2, 'image/png', $3, $4, $5, $6)
         returning id
       `,
-      [randomUUID(), firma.width, firma.height, hash, firma.dataUrl],
+      [randomUUID(), fileId, firma.width, firma.height, hash, firma.dataUrl],
     );
 
     return result.rows[0]?.id ?? null;

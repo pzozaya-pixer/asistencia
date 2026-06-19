@@ -12,6 +12,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { QrSessionsModule } from './qr-sessions/qr-sessions.module';
+import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -23,6 +24,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     HealthModule,
     AuthModule,
+    StorageModule,
     ActivitiesModule,
     AttendeesModule,
     AttendanceModule,

@@ -11,6 +11,7 @@ import {
   getStoredUser,
   importActivityAttendees,
   removeActivityAttendee,
+  uploadAttendeePhoto,
   updateActivity,
   updateActivityAttendee,
   type ActivityAttendeeRecord,
@@ -390,6 +391,38 @@ export default function ActivitiesPage() {
     }
   }
 
+  async function handlePhotoChange(
+    attendeeId: string,
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+
+    try {
+      await uploadAttendeePhoto(attendeeId, file);
+      setAttendees((current) =>
+        current.map((entry) =>
+          entry.attendeeId === attendeeId ? { ...entry, hasPhoto: true } : entry
+        )
+      );
+      setNotice("Fotografía subida a MinIO y vinculada al asistente.");
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "No se pudo subir la fotografía."
+      );
+    } finally {
+      event.target.value = "";
+    }
+  }
+
   if (sessionUser && sessionUser.role === "operador_lectura") {
     return (
       <main className="space-y-6">
@@ -756,6 +789,9 @@ export default function ActivitiesPage() {
                           : "Sin acceso registrado"}
                         {entry.fechaHora ? ` · ${formatDateTime(entry.fechaHora)}` : ""}
                       </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {entry.hasPhoto ? "Foto cargada en MinIO" : "Sin fotografía subida"}
+                      </p>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -782,6 +818,15 @@ export default function ActivitiesPage() {
                       >
                         Quitar
                       </button>
+                      <label className="inline-flex cursor-pointer items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-signal hover:text-signal">
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          onChange={(event) => void handlePhotoChange(entry.attendeeId, event)}
+                        />
+                        {entry.hasPhoto ? "Cambiar foto" : "Subir foto"}
+                      </label>
                     </div>
                   </div>
                 </article>

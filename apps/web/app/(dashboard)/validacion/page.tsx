@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import {
   consumeQrAttendance,
   createAttendanceRecord,
+  fetchProtectedAsset,
   resolveQrSession,
   searchAttendees,
   type AttendeeLookupResult,
@@ -75,6 +76,7 @@ export default function ValidationPage() {
   const [checklistState, setChecklistState] = useState<ChecklistState>(initialChecklistState);
   const [signature, setSignature] = useState<SignatureValue | null>(null);
   const [signaturePadKey, setSignaturePadKey] = useState(0);
+  const [photoObjectUrl, setPhotoObjectUrl] = useState<string | null>(null);
   const scannerRef = useRef<{
     isScanning: boolean;
     start: (
@@ -182,6 +184,45 @@ export default function ValidationPage() {
   const activityStatus = selectedAttendee?.estadoActividad
     ? activityStatusLabels[selectedAttendee.estadoActividad] ?? selectedAttendee.estadoActividad
     : "Pendiente";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPhoto() {
+      if (!selectedAttendee?.photoUrl) {
+        setPhotoObjectUrl(null);
+        return;
+      }
+
+      try {
+        const blob = await fetchProtectedAsset(selectedAttendee.photoUrl);
+        const objectUrl = URL.createObjectURL(blob);
+
+        if (!cancelled) {
+          setPhotoObjectUrl(objectUrl);
+        } else {
+          URL.revokeObjectURL(objectUrl);
+        }
+      } catch {
+        if (!cancelled) {
+          setPhotoObjectUrl(null);
+        }
+      }
+    }
+
+    void loadPhoto();
+
+    return () => {
+      cancelled = true;
+      setPhotoObjectUrl((current) => {
+        if (current) {
+          URL.revokeObjectURL(current);
+        }
+
+        return null;
+      });
+    };
+  }, [selectedAttendee?.id, selectedAttendee?.photoUrl]);
 
   function resetVisualValidation() {
     setChecklistState(initialChecklistState);
@@ -644,17 +685,26 @@ export default function ValidationPage() {
                       </p>
                     </div>
                     <div className="flex aspect-[4/5] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-white/75 text-center">
-                      <div>
-                        <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-slate-900 text-2xl font-bold text-white">
-                          {selectedAttendee.nombre.charAt(0)}
-                          {selectedAttendee.apellidos.charAt(0)}
+                      {photoObjectUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={photoObjectUrl}
+                          alt={`Fotografía de ${selectedAttendee.nombre} ${selectedAttendee.apellidos}`}
+                          className="h-full w-full rounded-[24px] object-cover"
+                        />
+                      ) : (
+                        <div>
+                          <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-slate-900 text-2xl font-bold text-white">
+                            {selectedAttendee.nombre.charAt(0)}
+                            {selectedAttendee.apellidos.charAt(0)}
+                          </div>
+                          <p className="text-sm text-slate-500">
+                            {selectedAttendee.hasPhoto
+                              ? "No se pudo cargar la foto ahora mismo"
+                              : "Pendiente de carga de fotografía"}
+                          </p>
                         </div>
-                        <p className="text-sm text-slate-500">
-                          {selectedAttendee.hasPhoto
-                            ? "Foto asociada en ficha"
-                            : "Pendiente de carga de fotografía"}
-                        </p>
-                      </div>
+                      )}
                     </div>
                   </div>
 

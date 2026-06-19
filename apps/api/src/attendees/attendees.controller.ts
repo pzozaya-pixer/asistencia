@@ -1,8 +1,24 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { AuthenticatedUser } from '../auth/token.service';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { SearchAttendeeDto } from './dto/search-attendee.dto';
 import { AttendeesService } from './attendees.service';
+
+type RequestWithUser = {
+  user: AuthenticatedUser;
+};
 
 @Controller('attendees')
 export class AttendeesController {
@@ -12,5 +28,37 @@ export class AttendeesController {
   @Roles(Role.SuperAdmin, Role.Responsable, Role.OperadorLectura)
   findAll(@Query() query: SearchAttendeeDto) {
     return this.attendeesService.findAll(query.q);
+  }
+
+  @Post(':id/photo')
+  @Roles(Role.SuperAdmin, Role.Responsable)
+  @UseInterceptors(FileInterceptor('file'))
+  uploadPhoto(
+    @Param('id') id: string,
+    @UploadedFile()
+    file: { buffer: Buffer; originalname: string; mimetype: string } | undefined,
+    @Req() request: RequestWithUser,
+  ) {
+    return this.attendeesService.uploadPhoto(id, file, request.user);
+  }
+
+  @Get(':id/photo')
+  @Roles(Role.SuperAdmin, Role.Responsable, Role.OperadorLectura)
+  async getPhoto(@Param('id') id: string, @Res() response: any) {
+    const file = await this.attendeesService.getPhotoFile(id);
+
+    response.setHeader('Content-Type', file.mimeType);
+    response.setHeader(
+      'Content-Disposition',
+      `inline; filename="${file.originalName}"`,
+    );
+
+    return response.send(file.buffer);
+  }
+
+  @Get(':id/photo-url')
+  @Roles(Role.SuperAdmin, Role.Responsable, Role.OperadorLectura)
+  getPhotoUrl(@Param('id') id: string) {
+    return this.attendeesService.getPhotoUrl(id);
   }
 }

@@ -26,6 +26,7 @@ export type AttendeeLookupResult = {
   nombre: string;
   apellidos: string;
   hasPhoto: boolean;
+  photoUrl?: string | null;
   actividad?: string | null;
   estadoActividad?: string | null;
   activities: Array<{
@@ -134,6 +135,7 @@ export type ActivityAttendeeRecord = {
   apellidos: string;
   telefono?: string | null;
   email?: string | null;
+  hasPhoto: boolean;
   estado: "inscrito" | "confirmado" | "asistido" | "ausente" | "cancelado" | "incidencia";
   observaciones?: string | null;
   attendanceStatus?: string | null;
@@ -641,6 +643,58 @@ export async function importActivityAttendees(activityId: string, file: File) {
     linked: number;
     errors: string[];
   };
+}
+
+export async function uploadAttendeePhoto(attendeeId: string, file: File) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`/api/attendees/${attendeeId}/photo`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: formData
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as {
+    fileId: string;
+    photoUrl: string;
+  };
+}
+
+export async function fetchProtectedAsset(url: string) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return response.blob();
 }
 
 export async function createQrSession(payload: {

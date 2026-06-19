@@ -1,5 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { AuthenticatedUser } from '../auth/token.service';
 import { DatabaseService } from '../database/database.service';
+import { StorageService } from '../storage/storage.service';
 
 type AttendeeRow = {
   id: string;
@@ -8,6 +15,8 @@ type AttendeeRow = {
   nombre: string;
   apellidos: string;
   hasPhoto: boolean;
+  photoBucket: string | null;
+  photoPath: string | null;
   activities: Array<{
     id: string;
     codigo: string;
@@ -19,7 +28,10 @@ type AttendeeRow = {
 
 @Injectable()
 export class AttendeesService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly storageService: StorageService,
+  ) {}
 
   async findAll(query?: string) {
     const normalizedQuery = query?.trim();
@@ -32,6 +44,8 @@ export class AttendeesService {
           a.nombre,
           a.apellidos,
           (a.foto_archivo_id is not null) as "hasPhoto",
+          ar.bucket as "photoBucket",
+          ar.ruta as "photoPath",
           coalesce(
             json_agg(
               distinct jsonb_build_object(
@@ -45,6 +59,7 @@ export class AttendeesService {
             '[]'::json
           ) as activities
         from asistentes a
+        left join archivos ar on ar.id = a.foto_archivo_id
         left join actividad_asistentes aa on aa.asistente_id = a.id
         left join actividades act on act.id = aa.actividad_id
         where a.deleted_at is null
@@ -53,7 +68,15 @@ export class AttendeesService {
             or concat_ws(' ', a.dni_nie, coalesce(a.telefono, ''), a.nombre, a.apellidos)
               ilike '%' || $1 || '%'
           )
-        group by a.id, a.dni_nie, a.telefono, a.nombre, a.apellidos, a.foto_archivo_id
+        group by
+          a.id,
+          a.dni_nie,
+          a.telefono,
+          a.nombre,
+          a.apellidos,
+          a.foto_archivo_id,
+          ar.bucket,
+          ar.ruta
         order by a.apellidos asc, a.nombre asc
         limit 20
       `,
@@ -73,7 +96,139 @@ export class AttendeesService {
         actividadId: preferredActivity?.id ?? null,
         actividad: preferredActivity?.nombre ?? null,
         estadoActividad: preferredActivity?.estadoInscripcion ?? null,
+        photoUrl: row.photoPath ? `/api/attendees/${row.id}/photo` : null,
       };
     });
+  }
+
+  async uploadPhoto(
+    attendeeId: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string } | undefined,
+    user: AuthenticatedUser,
+  ) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Debes subir una imagen válida.');
+    }
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+      throw new BadRequestException(
+        'La fotografía debe ser JPG, PNG o WEBP.',
+      );
+    }
+
+    const attendee = await this.database.query<{
+      id: string;
+    }>(
+      `
+        select id
+        from asistentes
+        where id = $1
+          and deleted_at is null
+        limit 1
+      `,
+      [attendeeId],
+    );
+
+    if (!attendee.rows[0]) {
+      throw new NotFoundException('Asistente no encontrado.');
+    }
+
+    const uploaded = await this.storageService.uploadObject({
+      bucket: process.env.MINIO_BUCKET_ASSISTANTS ?? 'asistentes-fotos',
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      buffer: file.buffer,
+      prefix: `attendees/${attendeeId}`,
+    });
+
+    const fileId = randomUUID();
+
+    await this.database.withTransaction(async (client) => {
+      await client.query(
+        `
+          insert into archivos (
+            id, bucket, ruta, nombre_original, mime_type, tamano, checksum, privado, uploaded_by
+          )
+          values ($1, $2, $3, $4, $5, $6, $7, true, $8)
+        `,
+        [
+          fileId,
+          uploaded.bucket,
+          uploaded.objectName,
+          file.originalname,
+          file.mimetype,
+          uploaded.size,
+          uploaded.checksum,
+          user.id,
+        ],
+      );
+
+      await client.query(
+        `
+          update asistentes
+          set foto_archivo_id = $2,
+              updated_at = timezone('utc', now())
+          where id = $1
+        `,
+        [attendeeId, fileId],
+      );
+    });
+
+    return {
+      fileId,
+      photoUrl: `/api/attendees/${attendeeId}/photo`,
+    };
+  }
+
+  async getPhotoFile(attendeeId: string) {
+    const file = await this.getPhotoMetadata(attendeeId);
+
+    return {
+      ...file,
+      buffer: await this.storageService.getObject(file.bucket, file.path),
+    };
+  }
+
+  async getPhotoUrl(attendeeId: string) {
+    const file = await this.getPhotoMetadata(attendeeId);
+    const signedUrl = await this.storageService.getSignedUrl(
+      file.bucket,
+      file.path,
+    );
+
+    return {
+      photoUrl: signedUrl,
+    };
+  }
+
+  private async getPhotoMetadata(attendeeId: string) {
+    const result = await this.database.query<{
+      bucket: string;
+      path: string;
+      mimeType: string;
+      originalName: string;
+    }>(
+      `
+        select
+          ar.bucket,
+          ar.ruta as path,
+          ar.mime_type as "mimeType",
+          ar.nombre_original as "originalName"
+        from asistentes a
+        join archivos ar on ar.id = a.foto_archivo_id
+        where a.id = $1
+          and a.deleted_at is null
+        limit 1
+      `,
+      [attendeeId],
+    );
+
+    const file = result.rows[0];
+
+    if (!file) {
+      throw new NotFoundException('Este asistente no tiene fotografía subida.');
+    }
+
+    return file;
   }
 }

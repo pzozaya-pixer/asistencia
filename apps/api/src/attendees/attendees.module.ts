@@ -7,4 +7,3 @@ import { AttendeesService } from "./attendees.service";
   providers: [AttendeesService]
 })
 export class AttendeesModule {}
-

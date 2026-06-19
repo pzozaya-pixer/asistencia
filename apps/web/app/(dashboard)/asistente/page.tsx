@@ -5,6 +5,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import {
   createQrSession,
+  fetchProtectedAsset,
   searchAttendees,
   type AttendeeLookupResult,
   type QrSessionResponse
@@ -26,6 +27,7 @@ export default function AttendeePage() {
   const [error, setError] = useState<string | null>(null);
   const [qrSession, setQrSession] = useState<QrSessionResponse | null>(null);
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
+  const [photoObjectUrl, setPhotoObjectUrl] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const deferredQuery = useDeferredValue(query);
 
@@ -166,6 +168,45 @@ export default function AttendeePage() {
   const selectedActivity =
     selectedAttendee?.activities.find((activity) => activity.id === selectedActivityId) ?? null;
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPhoto() {
+      if (!selectedAttendee?.photoUrl) {
+        setPhotoObjectUrl(null);
+        return;
+      }
+
+      try {
+        const blob = await fetchProtectedAsset(selectedAttendee.photoUrl);
+        const objectUrl = URL.createObjectURL(blob);
+
+        if (!cancelled) {
+          setPhotoObjectUrl(objectUrl);
+        } else {
+          URL.revokeObjectURL(objectUrl);
+        }
+      } catch {
+        if (!cancelled) {
+          setPhotoObjectUrl(null);
+        }
+      }
+    }
+
+    void loadPhoto();
+
+    return () => {
+      cancelled = true;
+      setPhotoObjectUrl((current) => {
+        if (current) {
+          URL.revokeObjectURL(current);
+        }
+
+        return null;
+      });
+    };
+  }, [selectedAttendee?.id, selectedAttendee?.photoUrl]);
+
   async function handleGenerateQr() {
     if (!selectedAttendee || !selectedActivity) {
       setError("Selecciona un asistente y una actividad antes de generar el QR.");
@@ -277,14 +318,33 @@ export default function AttendeePage() {
               {selectedAttendee ? (
                 <div className="space-y-4">
                   <div className="rounded-[28px] border border-white/10 bg-white/5 p-4">
-                    <p className="text-lg font-semibold">
-                      {selectedAttendee.nombre} {selectedAttendee.apellidos}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-300">
-                      {selectedAttendee.actividad
-                        ? `Actividad actual: ${selectedAttendee.actividad}`
-                        : "Sin actividad asociada en la demo actual"}
-                    </p>
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-900/80">
+                        {photoObjectUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={photoObjectUrl}
+                            alt={`Fotografía de ${selectedAttendee.nombre} ${selectedAttendee.apellidos}`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-sm font-bold text-white">
+                            {selectedAttendee.nombre.charAt(0)}
+                            {selectedAttendee.apellidos.charAt(0)}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-lg font-semibold">
+                          {selectedAttendee.nombre} {selectedAttendee.apellidos}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-300">
+                          {selectedAttendee.actividad
+                            ? `Actividad actual: ${selectedAttendee.actividad}`
+                            : "Sin actividad asociada en la demo actual"}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                   <div className="space-y-3 rounded-[28px] border border-white/10 bg-white/5 p-4">
                     <div>
