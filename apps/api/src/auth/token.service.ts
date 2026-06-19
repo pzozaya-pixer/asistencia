@@ -22,6 +22,15 @@ interface TokenPayload {
   exp: number;
 }
 
+interface QrTokenPayload {
+  sid: string;
+  aid: string;
+  act: string;
+  tokenUse: 'qr';
+  iat: number;
+  exp: number;
+}
+
 @Injectable()
 export class TokenService {
   constructor(private readonly configService: ConfigService) {}
@@ -42,6 +51,38 @@ export class TokenService {
     return this.verifyToken(token, 'refresh');
   }
 
+  signQrToken(input: {
+    sessionId: string;
+    attendeeId: string;
+    activityId: string;
+    expiresAt: Date;
+  }) {
+    const payload: QrTokenPayload = {
+      sid: input.sessionId,
+      aid: input.attendeeId,
+      act: input.activityId,
+      tokenUse: 'qr',
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(input.expiresAt.getTime() / 1000),
+    };
+
+    return this.encode(payload, this.getQrSecret());
+  }
+
+  verifyQrToken(token: string) {
+    const payload = this.decode<QrTokenPayload>(token, this.getQrSecret());
+
+    if (payload.tokenUse !== 'qr') {
+      throw new UnauthorizedException('Invalid token type.');
+    }
+
+    if (payload.exp <= Math.floor(Date.now() / 1000)) {
+      throw new UnauthorizedException('Token expired.');
+    }
+
+    return payload;
+  }
+
   private signToken(user: AuthenticatedUser, tokenUse: TokenUse, ttlSeconds: number) {
     const now = Math.floor(Date.now() / 1000);
     const payload: TokenPayload = {
@@ -58,7 +99,7 @@ export class TokenService {
   }
 
   private verifyToken(token: string, expectedUse: TokenUse): AuthenticatedUser {
-    const payload = this.decode(token, this.getSecret(expectedUse));
+    const payload = this.decode<TokenPayload>(token, this.getSecret(expectedUse));
 
     if (payload.tokenUse !== expectedUse) {
       throw new UnauthorizedException('Invalid token type.');
@@ -76,7 +117,7 @@ export class TokenService {
     };
   }
 
-  private encode(payload: TokenPayload, secret: string) {
+  private encode(payload: object, secret: string) {
     const header = { alg: 'HS256', typ: 'JWT' };
     const encodedHeader = this.toBase64Url(JSON.stringify(header));
     const encodedPayload = this.toBase64Url(JSON.stringify(payload));
@@ -85,7 +126,7 @@ export class TokenService {
     return `${encodedHeader}.${encodedPayload}.${signature}`;
   }
 
-  private decode(token: string, secret: string): TokenPayload {
+  private decode<T>(token: string, secret: string): T {
     const [encodedHeader, encodedPayload, providedSignature] = token.split('.');
 
     if (!encodedHeader || !encodedPayload || !providedSignature) {
@@ -107,7 +148,7 @@ export class TokenService {
     try {
       return JSON.parse(
         Buffer.from(this.fromBase64Url(encodedPayload), 'base64').toString('utf8'),
-      ) as TokenPayload;
+      ) as T;
     } catch {
       throw new UnauthorizedException('Invalid token payload.');
     }
@@ -136,6 +177,14 @@ export class TokenService {
     return (
       this.configService.get<string>('JWT_REFRESH_SECRET') ??
       'dev-refresh-secret-change-me'
+    );
+  }
+
+  private getQrSecret() {
+    return (
+      this.configService.get<string>('QR_SIGNING_SECRET') ??
+      this.configService.get<string>('JWT_ACCESS_SECRET') ??
+      'dev-qr-secret-change-me'
     );
   }
 }

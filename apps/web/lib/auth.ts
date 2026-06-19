@@ -26,6 +26,24 @@ export type AttendeeLookupResult = {
   nombre: string;
   apellidos: string;
   actividad?: string | null;
+  activities: Array<{
+    id: string;
+    codigo: string;
+    nombre: string;
+    estado: string;
+  }>;
+};
+
+export type QrSessionResponse = {
+  id: string;
+  token: string;
+  expiresAt: string;
+  ttlSeconds: number;
+  attendeeId: string;
+  attendeeName: string;
+  activityId: string;
+  activityCode: string;
+  activityName: string;
 };
 
 export type DashboardSummary = {
@@ -202,6 +220,35 @@ export async function fetchDashboardSummary() {
   }
 
   return (await response.json()) as DashboardSummary;
+}
+
+export async function createQrSession(payload: {
+  attendeeId: string;
+  activityId: string;
+  ttlSeconds?: number;
+}) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch("/api/qr-sessions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as QrSessionResponse;
 }
 
 function authorizedRequest(token: string): RequestInit {

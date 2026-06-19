@@ -11,6 +11,7 @@ import { CryptoModule } from './crypto/crypto.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
+import { QrSessionsModule } from './qr-sessions/qr-sessions.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -25,6 +26,7 @@ import { UsersModule } from './users/users.module';
     ActivitiesModule,
     AttendeesModule,
     AttendanceModule,
+    QrSessionsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

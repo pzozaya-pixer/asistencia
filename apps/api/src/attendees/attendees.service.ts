@@ -3,12 +3,16 @@ import { DatabaseService } from '../database/database.service';
 
 type AttendeeRow = {
   id: string;
-  actividadId: string | null;
   dniNie: string;
   telefono: string | null;
   nombre: string;
   apellidos: string;
-  actividad: string | null;
+  activities: Array<{
+    id: string;
+    codigo: string;
+    nombre: string;
+    estado: string;
+  }>;
 };
 
 @Injectable()
@@ -21,12 +25,21 @@ export class AttendeesService {
       `
         select
           a.id,
-          act.id as "actividadId",
           a.dni_nie as "dniNie",
           a.telefono,
           a.nombre,
           a.apellidos,
-          act.nombre as actividad
+          coalesce(
+            json_agg(
+              distinct jsonb_build_object(
+                'id', act.id,
+                'codigo', act.codigo,
+                'nombre', act.nombre,
+                'estado', act.estado
+              )
+            ) filter (where act.id is not null),
+            '[]'::json
+          ) as activities
         from asistentes a
         left join actividad_asistentes aa on aa.asistente_id = a.id
         left join actividades act on act.id = aa.actividad_id
@@ -36,12 +49,26 @@ export class AttendeesService {
             or concat_ws(' ', a.dni_nie, coalesce(a.telefono, ''), a.nombre, a.apellidos)
               ilike '%' || $1 || '%'
           )
+        group by a.id, a.dni_nie, a.telefono, a.nombre, a.apellidos
         order by a.apellidos asc, a.nombre asc
         limit 20
       `,
       [normalizedQuery ?? null],
     );
 
-    return result.rows;
+    return result.rows.map((row) => {
+      const activities = row.activities ?? [];
+      const preferredActivity =
+        activities.find((activity) => activity.estado === 'activa') ??
+        activities[0] ??
+        null;
+
+      return {
+        ...row,
+        activities,
+        actividadId: preferredActivity?.id ?? null,
+        actividad: preferredActivity?.nombre ?? null,
+      };
+    });
   }
 }
