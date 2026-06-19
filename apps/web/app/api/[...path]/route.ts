@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
 
 const backendBaseUrl =
-  process.env.API_INTERNAL_URL ?? "http://api:4000/api/v1";
+  process.env.API_INTERNAL_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://asistencia-api:4000/api/v1";
 
 type RouteContext = {
   params: Promise<{
@@ -42,12 +44,24 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
       ? undefined
       : await request.text();
 
-  const upstreamResponse = await fetch(url, {
-    method: request.method,
-    headers: buildHeaders(request),
-    body: body?.length ? body : undefined,
-    cache: "no-store"
-  });
+  let upstreamResponse: Response;
+
+  try {
+    upstreamResponse = await fetch(url, {
+      method: request.method,
+      headers: buildHeaders(request),
+      body: body?.length ? body : undefined,
+      cache: "no-store"
+    });
+  } catch {
+    return Response.json(
+      {
+        message:
+          "El servicio interno no responde. Revisa API_INTERNAL_URL o la conectividad con la API."
+      },
+      { status: 503 }
+    );
+  }
 
   return new Response(upstreamResponse.body, {
     status: upstreamResponse.status,
