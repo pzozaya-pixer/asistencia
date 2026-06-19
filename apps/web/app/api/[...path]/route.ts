@@ -40,7 +40,7 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
   const body =
     request.method === "GET" || request.method === "HEAD"
       ? undefined
-      : await request.text();
+      : new Uint8Array(await request.arrayBuffer());
 
   let upstreamResponse: Response;
 
@@ -48,7 +48,7 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
     upstreamResponse = await fetch(url, {
       method: request.method,
       headers: buildHeaders(request),
-      body: body?.length ? body : undefined,
+      body: body && body.byteLength > 0 ? body : undefined,
       cache: "no-store"
     });
   } catch {

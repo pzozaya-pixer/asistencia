@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import * as XLSX from 'xlsx';
 import { DatabaseService } from '../database/database.service';
 
 type DashboardMetricRow = {
@@ -255,12 +256,13 @@ export class DashboardService {
 
   async exportActiveActivityExcel() {
     const report = await this.getActiveActivityExportReport();
-    const content = this.buildExcelXml(report);
+    const content = this.buildExcelWorkbook(report);
 
     return {
-      filename: `${report.activity.codigo.toLowerCase()}-asistencia.xls`,
-      contentType: 'application/vnd.ms-excel',
-      buffer: Buffer.from(content, 'utf-8'),
+      filename: `${report.activity.codigo.toLowerCase()}-asistencia.xlsx`,
+      contentType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: content,
     };
   }
 
@@ -353,7 +355,7 @@ export class DashboardService {
     };
   }
 
-  private buildExcelXml(report: {
+  private buildExcelWorkbook(report: {
     activity: ActiveActivityRow;
     rows: ExportReportRow[];
   }) {
@@ -384,35 +386,21 @@ export class DashboardService {
       ]),
     ];
 
-    const rowsXml = worksheetRows
-      .map(
-        (row) => `
-          <Row>
-            ${row
-              .map(
-                (cell) => `
-                  <Cell><Data ss:Type="String">${this.escapeXml(String(cell ?? ''))}</Data></Cell>
-                `,
-              )
-              .join('')}
-          </Row>
-        `,
-      )
-      .join('');
-
-    return `<?xml version="1.0"?>
-      <?mso-application progid="Excel.Sheet"?>
-      <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-        xmlns:o="urn:schemas-microsoft-com:office:office"
-        xmlns:x="urn:schemas-microsoft-com:office:excel"
-        xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
-        xmlns:html="http://www.w3.org/TR/REC-html40">
-        <Worksheet ss:Name="Asistencia">
-          <Table>
-            ${rowsXml}
-          </Table>
-        </Worksheet>
-      </Workbook>`;
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetRows);
+    worksheet['!cols'] = [
+      { wch: 14 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 22 },
+      { wch: 28 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Asistencia');
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
   }
 
   private buildSimplePdf(lines: string[]) {
@@ -489,15 +477,6 @@ ${xrefOffset}
     }
 
     return output;
-  }
-
-  private escapeXml(value: string) {
-    return value
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&apos;');
   }
 
   private escapePdfText(value: string) {

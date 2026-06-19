@@ -68,7 +68,7 @@ export function DashboardClient() {
 
     try {
       const blob = await downloadDashboardExport(format);
-      const extension = format === "excel" ? "xls" : "pdf";
+      const extension = format === "excel" ? "xlsx" : "pdf";
       const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = objectUrl;

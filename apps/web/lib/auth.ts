@@ -127,6 +127,20 @@ export type ActivityRecord = {
   responsableUserId?: string | null;
 };
 
+export type ActivityAttendeeRecord = {
+  attendeeId: string;
+  dniNie: string;
+  nombre: string;
+  apellidos: string;
+  telefono?: string | null;
+  email?: string | null;
+  estado: "inscrito" | "confirmado" | "asistido" | "ausente" | "cancelado" | "incidencia";
+  observaciones?: string | null;
+  attendanceStatus?: string | null;
+  metodoRegistro?: string | null;
+  fechaHora?: string | null;
+};
+
 export function getStoredAccessToken() {
   return getStorageItem(ACCESS_TOKEN_KEY);
 }
@@ -487,6 +501,146 @@ export async function updateActivity(
   }
 
   return (await response.json()) as ActivityRecord;
+}
+
+export async function fetchActivityAttendees(activityId: string) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch(`/api/activities/${activityId}/attendees`, authorizedRequest(token));
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ActivityAttendeeRecord[];
+}
+
+export async function createActivityAttendee(
+  activityId: string,
+  payload: {
+    dniNie: string;
+    nombre: string;
+    apellidos: string;
+    telefono?: string;
+    email?: string;
+    estado?: ActivityAttendeeRecord["estado"];
+    observaciones?: string;
+  }
+) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch(`/api/activities/${activityId}/attendees`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ActivityAttendeeRecord;
+}
+
+export async function updateActivityAttendee(
+  activityId: string,
+  attendeeId: string,
+  payload: Partial<{
+    estado: ActivityAttendeeRecord["estado"];
+    observaciones: string;
+  }>
+) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch(`/api/activities/${activityId}/attendees/${attendeeId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ActivityAttendeeRecord;
+}
+
+export async function removeActivityAttendee(activityId: string, attendeeId: string) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch(`/api/activities/${activityId}/attendees/${attendeeId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as { success: boolean };
+}
+
+export async function importActivityAttendees(activityId: string, file: File) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`/api/activities/${activityId}/attendees/import`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: formData
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as {
+    created: number;
+    updated: number;
+    linked: number;
+    errors: string[];
+  };
 }
 
 export async function createQrSession(payload: {

@@ -4,10 +4,16 @@ import { useEffect, useState } from "react";
 
 import {
   createActivity,
+  createActivityAttendee,
   fetchActivities,
+  fetchActivityAttendees,
   fetchResponsables,
   getStoredUser,
+  importActivityAttendees,
+  removeActivityAttendee,
   updateActivity,
+  updateActivityAttendee,
+  type ActivityAttendeeRecord,
   type ActivityRecord,
   type ManagedUser,
   type SessionUser
@@ -24,7 +30,16 @@ const statusLabels: Record<ActivityRecord["estado"], string> = {
   cancelada: "Cancelada"
 };
 
-const initialForm = {
+const attendeeStateLabels: Record<ActivityAttendeeRecord["estado"], string> = {
+  inscrito: "Inscrito",
+  confirmado: "Confirmado",
+  asistido: "Asistido",
+  ausente: "Ausente",
+  cancelado: "Cancelado",
+  incidencia: "Incidencia"
+};
+
+const initialActivityForm = {
   codigo: "",
   nombre: "",
   descripcion: "",
@@ -36,14 +51,29 @@ const initialForm = {
   responsableUserId: ""
 };
 
+const initialAttendeeForm = {
+  dniNie: "",
+  nombre: "",
+  apellidos: "",
+  telefono: "",
+  email: "",
+  estado: "confirmado" as ActivityAttendeeRecord["estado"],
+  observaciones: ""
+};
+
 export default function ActivitiesPage() {
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [activities, setActivities] = useState<ActivityRecord[]>([]);
   const [responsables, setResponsables] = useState<ManagedUser[]>([]);
+  const [attendees, setAttendees] = useState<ActivityAttendeeRecord[]>([]);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
-  const [form, setForm] = useState(initialForm);
+  const [activityForm, setActivityForm] = useState(initialActivityForm);
+  const [attendeeForm, setAttendeeForm] = useState(initialAttendeeForm);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingActivity, setIsSavingActivity] = useState(false);
+  const [isLoadingAttendees, setIsLoadingAttendees] = useState(false);
+  const [isSavingAttendee, setIsSavingAttendee] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -100,62 +130,95 @@ export default function ActivitiesPage() {
 
   useEffect(() => {
     if (!selectedActivityId) {
-      setForm({
-        ...initialForm,
+      setActivityForm({
+        ...initialActivityForm,
         responsableUserId:
-          sessionUser?.role === "responsable" ? sessionUser.id : initialForm.responsableUserId
+          sessionUser?.role === "responsable" ? sessionUser.id : initialActivityForm.responsableUserId
       });
+      setAttendees([]);
       return;
     }
 
+    const activityId = selectedActivityId;
     const selectedActivity = activities.find((entry) => entry.id === selectedActivityId);
 
-    if (!selectedActivity) {
-      return;
+    if (selectedActivity) {
+      setActivityForm({
+        codigo: selectedActivity.codigo,
+        nombre: selectedActivity.nombre,
+        descripcion: selectedActivity.descripcion ?? "",
+        fechaInicio: toDateTimeInputValue(selectedActivity.fechaInicio),
+        fechaFin: toDateTimeInputValue(selectedActivity.fechaFin),
+        ubicacion: selectedActivity.ubicacion ?? "",
+        aforo: selectedActivity.aforo ? String(selectedActivity.aforo) : "",
+        estado: selectedActivity.estado,
+        responsableUserId:
+          selectedActivity.responsableUserId ??
+          (sessionUser?.role === "responsable" ? sessionUser.id : "")
+      });
     }
 
-    setForm({
-      codigo: selectedActivity.codigo,
-      nombre: selectedActivity.nombre,
-      descripcion: selectedActivity.descripcion ?? "",
-      fechaInicio: toDateTimeInputValue(selectedActivity.fechaInicio),
-      fechaFin: toDateTimeInputValue(selectedActivity.fechaFin),
-      ubicacion: selectedActivity.ubicacion ?? "",
-      aforo: selectedActivity.aforo ? String(selectedActivity.aforo) : "",
-      estado: selectedActivity.estado,
-      responsableUserId:
-        selectedActivity.responsableUserId ??
-        (sessionUser?.role === "responsable" ? sessionUser.id : "")
-    });
+    let cancelled = false;
+
+    async function loadAttendees() {
+      setIsLoadingAttendees(true);
+
+      try {
+        const nextAttendees = await fetchActivityAttendees(activityId);
+
+        if (!cancelled) {
+          setAttendees(nextAttendees);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "No se pudieron cargar los asistentes del evento."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingAttendees(false);
+        }
+      }
+    }
+
+    void loadAttendees();
+
+    return () => {
+      cancelled = true;
+    };
   }, [activities, selectedActivityId, sessionUser]);
 
   function resetForCreate() {
     setSelectedActivityId(null);
-    setForm({
-      ...initialForm,
+    setActivityForm({
+      ...initialActivityForm,
       responsableUserId: sessionUser?.role === "responsable" ? sessionUser.id : ""
     });
+    setAttendeeForm(initialAttendeeForm);
     setError(null);
     setNotice(null);
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleActivitySubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setIsSaving(true);
+    setIsSavingActivity(true);
     setError(null);
     setNotice(null);
 
     try {
       const payload = {
-        codigo: form.codigo.trim(),
-        nombre: form.nombre.trim(),
-        descripcion: form.descripcion.trim() || undefined,
-        fechaInicio: new Date(form.fechaInicio).toISOString(),
-        fechaFin: new Date(form.fechaFin).toISOString(),
-        ubicacion: form.ubicacion.trim() || undefined,
-        aforo: form.aforo ? Number(form.aforo) : undefined,
-        estado: form.estado,
-        responsableUserId: form.responsableUserId || undefined
+        codigo: activityForm.codigo.trim(),
+        nombre: activityForm.nombre.trim(),
+        descripcion: activityForm.descripcion.trim() || undefined,
+        fechaInicio: new Date(activityForm.fechaInicio).toISOString(),
+        fechaFin: new Date(activityForm.fechaFin).toISOString(),
+        ubicacion: activityForm.ubicacion.trim() || undefined,
+        aforo: activityForm.aforo ? Number(activityForm.aforo) : undefined,
+        estado: activityForm.estado,
+        responsableUserId: activityForm.responsableUserId || undefined
       };
 
       if (selectedActivityId) {
@@ -203,7 +266,127 @@ export default function ActivitiesPage() {
         saveError instanceof Error ? saveError.message : "No se pudo guardar el evento."
       );
     } finally {
-      setIsSaving(false);
+      setIsSavingActivity(false);
+    }
+  }
+
+  async function handleAttendeeSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedActivityId) {
+      setError("Primero selecciona o crea un evento.");
+      return;
+    }
+
+    setIsSavingAttendee(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const nextAttendee = await createActivityAttendee(selectedActivityId, {
+        dniNie: attendeeForm.dniNie,
+        nombre: attendeeForm.nombre,
+        apellidos: attendeeForm.apellidos,
+        telefono: attendeeForm.telefono || undefined,
+        email: attendeeForm.email || undefined,
+        estado: attendeeForm.estado,
+        observaciones: attendeeForm.observaciones || undefined
+      });
+
+      setAttendees((current) =>
+        [nextAttendee, ...current.filter((entry) => entry.attendeeId !== nextAttendee.attendeeId)].sort(
+          (left, right) =>
+            `${left.apellidos} ${left.nombre}`.localeCompare(
+              `${right.apellidos} ${right.nombre}`,
+              "es"
+            )
+        )
+      );
+      setAttendeeForm(initialAttendeeForm);
+      setNotice("Asistente vinculado al evento.");
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : "No se pudo guardar el asistente."
+      );
+    } finally {
+      setIsSavingAttendee(false);
+    }
+  }
+
+  async function handleImportChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file || !selectedActivityId) {
+      return;
+    }
+
+    setIsImporting(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const result = await importActivityAttendees(selectedActivityId, file);
+      const nextAttendees = await fetchActivityAttendees(selectedActivityId);
+      setAttendees(nextAttendees);
+
+      const summary = [
+        `${result.created} creados`,
+        `${result.updated} actualizados`,
+        `${result.linked} vinculados`
+      ].join(" · ");
+
+      setNotice(
+        result.errors.length > 0
+          ? `${summary}. Incidencias: ${result.errors.join(" | ")}`
+          : `${summary}. Importación completada.`
+      );
+    } catch (importError) {
+      setError(
+        importError instanceof Error ? importError.message : "No se pudo importar el archivo."
+      );
+    } finally {
+      setIsImporting(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleAttendeeStateChange(
+    attendeeId: string,
+    estado: ActivityAttendeeRecord["estado"]
+  ) {
+    if (!selectedActivityId) {
+      return;
+    }
+
+    try {
+      const updated = await updateActivityAttendee(selectedActivityId, attendeeId, { estado });
+      setAttendees((current) =>
+        current.map((entry) => (entry.attendeeId === attendeeId ? updated : entry))
+      );
+    } catch (updateError) {
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : "No se pudo actualizar el estado del asistente."
+      );
+    }
+  }
+
+  async function handleRemoveAttendee(attendeeId: string) {
+    if (!selectedActivityId) {
+      return;
+    }
+
+    try {
+      await removeActivityAttendee(selectedActivityId, attendeeId);
+      setAttendees((current) => current.filter((entry) => entry.attendeeId !== attendeeId));
+      setNotice("Asistente retirado del evento.");
+    } catch (removeError) {
+      setError(
+        removeError instanceof Error
+          ? removeError.message
+          : "No se pudo quitar el asistente del evento."
+      );
     }
   }
 
@@ -232,10 +415,10 @@ export default function ActivitiesPage() {
       <PageHeader
         overline="Operativa"
         title="Mantenimiento de eventos"
-        description="Gestiona actividades, fechas, estado operativo y responsable asignado."
+        description="Gestiona el evento y sus asistentes, con carga manual o importación desde Excel."
       />
 
-      <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+      <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <SectionCard
           title="Agenda de actividades"
           description="Selecciona un evento para editarlo o crea uno nuevo."
@@ -291,116 +474,90 @@ export default function ActivitiesPage() {
 
         <SectionCard
           title={selectedActivityId ? "Editar evento" : "Alta de evento"}
-          description="Una actividad nueva puede nacer en borrador o quedar activa directamente."
+          description="El responsable puede preparar el evento y después gestionar asistentes en el mismo panel."
         >
-          <form className="space-y-4" onSubmit={handleSubmit}>
+          <form className="space-y-4" onSubmit={handleActivitySubmit}>
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-2 text-sm font-medium text-ink">
-                <span>Código</span>
-                <input
-                  value={form.codigo}
-                  onChange={(event) => setForm((current) => ({ ...current, codigo: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
-                  required
-                />
-              </label>
-              <label className="space-y-2 text-sm font-medium text-ink">
-                <span>Nombre</span>
-                <input
-                  value={form.nombre}
-                  onChange={(event) => setForm((current) => ({ ...current, nombre: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
-                  required
-                />
-              </label>
-              <label className="space-y-2 text-sm font-medium text-ink">
-                <span>Fecha inicio</span>
-                <input
-                  type="datetime-local"
-                  value={form.fechaInicio}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, fechaInicio: event.target.value }))
-                  }
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
-                  required
-                />
-              </label>
-              <label className="space-y-2 text-sm font-medium text-ink">
-                <span>Fecha fin</span>
-                <input
-                  type="datetime-local"
-                  value={form.fechaFin}
-                  onChange={(event) => setForm((current) => ({ ...current, fechaFin: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
-                  required
-                />
-              </label>
-              <label className="space-y-2 text-sm font-medium text-ink">
-                <span>Ubicación</span>
-                <input
-                  value={form.ubicacion}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, ubicacion: event.target.value }))
-                  }
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
-                />
-              </label>
-              <label className="space-y-2 text-sm font-medium text-ink">
-                <span>Aforo</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={form.aforo}
-                  onChange={(event) => setForm((current) => ({ ...current, aforo: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
-                />
-              </label>
-              <label className="space-y-2 text-sm font-medium text-ink">
-                <span>Estado</span>
-                <select
-                  value={form.estado}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      estado: event.target.value as ActivityRecord["estado"]
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
-                >
-                  <option value="borrador">Borrador</option>
-                  <option value="activa">Activa</option>
-                  <option value="finalizada">Finalizada</option>
-                  <option value="cancelada">Cancelada</option>
-                </select>
-              </label>
-              <label className="space-y-2 text-sm font-medium text-ink">
-                <span>Responsable</span>
-                <select
-                  value={form.responsableUserId}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      responsableUserId: event.target.value
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
-                  disabled={sessionUser?.role === "responsable"}
-                >
-                  <option value="">Sin asignar</option>
-                  {responsables.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.fullName}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <Field
+                label="Código"
+                value={activityForm.codigo}
+                onChange={(value) => setActivityForm((current) => ({ ...current, codigo: value }))}
+                required
+              />
+              <Field
+                label="Nombre"
+                value={activityForm.nombre}
+                onChange={(value) => setActivityForm((current) => ({ ...current, nombre: value }))}
+                required
+              />
+              <Field
+                label="Fecha inicio"
+                type="datetime-local"
+                value={activityForm.fechaInicio}
+                onChange={(value) =>
+                  setActivityForm((current) => ({ ...current, fechaInicio: value }))
+                }
+                required
+              />
+              <Field
+                label="Fecha fin"
+                type="datetime-local"
+                value={activityForm.fechaFin}
+                onChange={(value) =>
+                  setActivityForm((current) => ({ ...current, fechaFin: value }))
+                }
+                required
+              />
+              <Field
+                label="Ubicación"
+                value={activityForm.ubicacion}
+                onChange={(value) =>
+                  setActivityForm((current) => ({ ...current, ubicacion: value }))
+                }
+              />
+              <Field
+                label="Aforo"
+                type="number"
+                value={activityForm.aforo}
+                onChange={(value) => setActivityForm((current) => ({ ...current, aforo: value }))}
+              />
+              <SelectField
+                label="Estado"
+                value={activityForm.estado}
+                onChange={(value) =>
+                  setActivityForm((current) => ({
+                    ...current,
+                    estado: value as ActivityRecord["estado"]
+                  }))
+                }
+                options={[
+                  { value: "borrador", label: "Borrador" },
+                  { value: "activa", label: "Activa" },
+                  { value: "finalizada", label: "Finalizada" },
+                  { value: "cancelada", label: "Cancelada" }
+                ]}
+              />
+              <SelectField
+                label="Responsable"
+                value={activityForm.responsableUserId}
+                onChange={(value) =>
+                  setActivityForm((current) => ({ ...current, responsableUserId: value }))
+                }
+                disabled={sessionUser?.role === "responsable"}
+                options={[
+                  { value: "", label: "Sin asignar" },
+                  ...responsables.map((entry) => ({ value: entry.id, label: entry.fullName }))
+                ]}
+              />
             </div>
 
             <label className="space-y-2 text-sm font-medium text-ink">
               <span>Descripción</span>
               <textarea
-                value={form.descripcion}
-                onChange={(event) => setForm((current) => ({ ...current, descripcion: event.target.value }))}
+                value={activityForm.descripcion}
+                onChange={(event) =>
+                  setActivityForm((current) => ({ ...current, descripcion: event.target.value }))
+                }
                 rows={4}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
               />
@@ -421,10 +578,14 @@ export default function ActivitiesPage() {
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={isSavingActivity}
                 className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isSaving ? "Guardando..." : selectedActivityId ? "Guardar cambios" : "Crear evento"}
+                {isSavingActivity
+                  ? "Guardando..."
+                  : selectedActivityId
+                    ? "Guardar cambios"
+                    : "Crear evento"}
               </button>
               <button
                 type="button"
@@ -437,7 +598,257 @@ export default function ActivitiesPage() {
           </form>
         </SectionCard>
       </section>
+
+      <section className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
+        <SectionCard
+          title="Alta e importación de asistentes"
+          description="Añade uno a uno o importa una hoja Excel con columnas DNI/NIE, nombre y apellidos."
+        >
+          <form className="space-y-4" onSubmit={handleAttendeeSubmit}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field
+                label="DNI/NIE"
+                value={attendeeForm.dniNie}
+                onChange={(value) => setAttendeeForm((current) => ({ ...current, dniNie: value }))}
+                required
+              />
+              <SelectField
+                label="Estado"
+                value={attendeeForm.estado}
+                onChange={(value) =>
+                  setAttendeeForm((current) => ({
+                    ...current,
+                    estado: value as ActivityAttendeeRecord["estado"]
+                  }))
+                }
+                options={Object.entries(attendeeStateLabels).map(([value, label]) => ({
+                  value,
+                  label
+                }))}
+              />
+              <Field
+                label="Nombre"
+                value={attendeeForm.nombre}
+                onChange={(value) => setAttendeeForm((current) => ({ ...current, nombre: value }))}
+                required
+              />
+              <Field
+                label="Apellidos"
+                value={attendeeForm.apellidos}
+                onChange={(value) =>
+                  setAttendeeForm((current) => ({ ...current, apellidos: value }))
+                }
+                required
+              />
+              <Field
+                label="Teléfono"
+                value={attendeeForm.telefono}
+                onChange={(value) =>
+                  setAttendeeForm((current) => ({ ...current, telefono: value }))
+                }
+              />
+              <Field
+                label="Email"
+                type="email"
+                value={attendeeForm.email}
+                onChange={(value) => setAttendeeForm((current) => ({ ...current, email: value }))}
+              />
+            </div>
+
+            <label className="space-y-2 text-sm font-medium text-ink">
+              <span>Observaciones</span>
+              <textarea
+                value={attendeeForm.observaciones}
+                onChange={(event) =>
+                  setAttendeeForm((current) => ({
+                    ...current,
+                    observaciones: event.target.value
+                  }))
+                }
+                rows={3}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
+              />
+            </label>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="submit"
+                disabled={isSavingAttendee || !selectedActivityId}
+                className="rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isSavingAttendee ? "Guardando..." : "Añadir al evento"}
+              </button>
+              <label className="inline-flex cursor-pointer items-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-ink transition hover:border-signal hover:text-signal">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  disabled={isImporting || !selectedActivityId}
+                  onChange={handleImportChange}
+                />
+                {isImporting ? "Importando Excel..." : "Importar XLSX"}
+              </label>
+            </div>
+
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              Plantilla mínima recomendada:
+              {" "}`DNI/NIE`, `Nombre`, `Apellidos`, `Teléfono`, `Email`, `Estado`, `Observaciones`.
+            </div>
+          </form>
+        </SectionCard>
+
+        <SectionCard
+          title="Asistentes del evento"
+          description={
+            selectedActivityId
+              ? `${attendees.length} vinculados a la actividad seleccionada.`
+              : "Selecciona o crea primero un evento."
+          }
+        >
+          <div className="space-y-3">
+            {selectedActivityId && isLoadingAttendees ? (
+              <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/80 p-5 text-sm text-slate-500">
+                Cargando asistentes...
+              </div>
+            ) : null}
+
+            {!selectedActivityId ? (
+              <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/80 p-5 text-sm text-slate-500">
+                Guarda o selecciona un evento para empezar a gestionar sus asistentes.
+              </div>
+            ) : null}
+
+            {selectedActivityId && !isLoadingAttendees && attendees.length === 0 ? (
+              <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/80 p-5 text-sm text-slate-500">
+                Este evento todavía no tiene asistentes vinculados.
+              </div>
+            ) : null}
+
+            {selectedActivityId &&
+              attendees.map((entry) => (
+                <article
+                  key={entry.attendeeId}
+                  className="rounded-[28px] border border-slate-200/70 bg-white/80 p-4"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-ink">
+                          {entry.nombre} {entry.apellidos}
+                        </p>
+                        <StatusBadge
+                          tone={entry.estado === "incidencia" ? "warning" : "info"}
+                        >
+                          {attendeeStateLabels[entry.estado]}
+                        </StatusBadge>
+                        {entry.attendanceStatus ? (
+                          <StatusBadge tone="success">{entry.attendanceStatus}</StatusBadge>
+                        ) : null}
+                      </div>
+                      <p className="text-sm text-slate-500">
+                        {entry.dniNie}
+                        {entry.telefono ? ` · ${entry.telefono}` : ""}
+                        {entry.email ? ` · ${entry.email}` : ""}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {entry.metodoRegistro
+                          ? `Último acceso: ${entry.metodoRegistro.toUpperCase()}`
+                          : "Sin acceso registrado"}
+                        {entry.fechaHora ? ` · ${formatDateTime(entry.fechaHora)}` : ""}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <select
+                        value={entry.estado}
+                        onChange={(event) =>
+                          void handleAttendeeStateChange(
+                            entry.attendeeId,
+                            event.target.value as ActivityAttendeeRecord["estado"]
+                          )
+                        }
+                        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-ink outline-none transition focus:border-signal"
+                      >
+                        {Object.entries(attendeeStateLabels).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveAttendee(entry.attendeeId)}
+                        className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+          </div>
+        </SectionCard>
+      </section>
     </main>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  required,
+  type = "text"
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  type?: string;
+}) {
+  return (
+    <label className="space-y-2 text-sm font-medium text-ink">
+      <span>{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
+        required={required}
+      />
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+  disabled
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="space-y-2 text-sm font-medium text-ink">
+      <span>{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -457,4 +868,14 @@ function formatDateRange(start: string, end: string) {
   });
 
   return `${formatter.format(new Date(start))} - ${formatter.format(new Date(end))}`;
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
 }
