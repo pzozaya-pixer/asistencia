@@ -33,6 +33,7 @@ export type AttendeeLookupResult = {
     codigo: string;
     nombre: string;
     estado: string;
+    estadoInscripcion?: string | null;
   }>;
 };
 

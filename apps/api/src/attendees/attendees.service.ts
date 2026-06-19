@@ -13,6 +13,7 @@ type AttendeeRow = {
     codigo: string;
     nombre: string;
     estado: string;
+    estadoInscripcion: string | null;
   }>;
 };
 
@@ -37,7 +38,8 @@ export class AttendeesService {
                 'id', act.id,
                 'codigo', act.codigo,
                 'nombre', act.nombre,
-                'estado', act.estado
+                'estado', act.estado,
+                'estadoInscripcion', aa.estado
               )
             ) filter (where act.id is not null),
             '[]'::json
@@ -70,7 +72,7 @@ export class AttendeesService {
         activities,
         actividadId: preferredActivity?.id ?? null,
         actividad: preferredActivity?.nombre ?? null,
-        estadoActividad: preferredActivity?.estado ?? null,
+        estadoActividad: preferredActivity?.estadoInscripcion ?? null,
       };
     });
   }

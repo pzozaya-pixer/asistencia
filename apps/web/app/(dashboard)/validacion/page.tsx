@@ -50,6 +50,8 @@ const initialChecklistState: ChecklistState = {
   incidencias: false
 };
 
+const MIN_MANUAL_SEARCH_LENGTH = 5;
+
 export default function ValidationPage() {
   const searchParams = useSearchParams();
   const attendeeId = searchParams.get("asistenteId");
@@ -59,10 +61,15 @@ export default function ValidationPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResolvingQr, setIsResolvingQr] = useState(false);
+  const [isManualSearchLoading, setIsManualSearchLoading] = useState(false);
   const [isScannerActive, setIsScannerActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const [manualSearchError, setManualSearchError] = useState<string | null>(null);
+  const [manualSearchMessage, setManualSearchMessage] = useState<string | null>(null);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [manualDniQuery, setManualDniQuery] = useState("");
+  const [manualSearchResults, setManualSearchResults] = useState<AttendeeLookupResult[]>([]);
   const [qrTokenInput, setQrTokenInput] = useState("");
   const [resolvedQrSession, setResolvedQrSession] = useState<ResolvedQrSession | null>(null);
   const [checklistState, setChecklistState] = useState<ChecklistState>(initialChecklistState);
@@ -176,6 +183,37 @@ export default function ValidationPage() {
     ? activityStatusLabels[selectedAttendee.estadoActividad] ?? selectedAttendee.estadoActividad
     : "Pendiente";
 
+  function resetVisualValidation() {
+    setChecklistState(initialChecklistState);
+    setSignature(null);
+    setSignaturePadKey((current) => current + 1);
+  }
+
+  function selectAttendeeForManual(attendee: AttendeeLookupResult) {
+    setSelectedAttendeeId(attendee.id);
+    setResolvedQrSession(null);
+    setValidationMessage(null);
+    setScannerError(null);
+    setManualSearchMessage(
+      `Documento localizado: ${attendee.nombre} ${attendee.apellidos}.`
+    );
+    resetVisualValidation();
+  }
+
+  function mergeAttendees(nextAttendees: AttendeeLookupResult[]) {
+    setAttendees((current) => {
+      const byId = new Map(current.map((attendee) => [attendee.id, attendee]));
+
+      for (const attendee of nextAttendees) {
+        byId.set(attendee.id, attendee);
+      }
+
+      return Array.from(byId.values()).sort((left, right) =>
+        `${left.apellidos} ${left.nombre}`.localeCompare(`${right.apellidos} ${right.nombre}`, "es")
+      );
+    });
+  }
+
   async function stopScanner() {
     const scanner = scannerRef.current;
 
@@ -252,6 +290,46 @@ export default function ValidationPage() {
     }
   }
 
+  async function handleManualDniSearch() {
+    const normalizedQuery = manualDniQuery.trim();
+
+    if (normalizedQuery.length < MIN_MANUAL_SEARCH_LENGTH) {
+      setManualSearchError("Introduce al menos 5 caracteres del DNI/NIE.");
+      return;
+    }
+
+    setIsManualSearchLoading(true);
+    setManualSearchError(null);
+    setManualSearchMessage(null);
+    setValidationMessage(null);
+
+    try {
+      const results = await searchAttendees(normalizedQuery);
+      setManualSearchResults(results);
+      mergeAttendees(results);
+
+      if (results.length === 0) {
+        setManualSearchError("No hay coincidencias para ese DNI/NIE.");
+        return;
+      }
+
+      if (results.length === 1) {
+        selectAttendeeForManual(results[0]);
+        return;
+      }
+
+      setManualSearchMessage(`${results.length} coincidencias encontradas.`);
+    } catch (searchError) {
+      setManualSearchError(
+        searchError instanceof Error
+          ? searchError.message
+          : "No se pudo buscar el documento."
+      );
+    } finally {
+      setIsManualSearchLoading(false);
+    }
+  }
+
   async function handleValidate() {
     if (!signature) {
       setError("Debes capturar la firma antes de confirmar la asistencia.");
@@ -263,6 +341,11 @@ export default function ValidationPage() {
       return;
     }
 
+    if (!resolvedQrSession && (!selectedAttendee?.actividadId || !selectedAttendee.id)) {
+      setError("Selecciona un asistente con actividad antes de registrar manualmente.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     setValidationMessage(null);
@@ -271,7 +354,7 @@ export default function ValidationPage() {
       const payload = {
         observaciones: resolvedQrSession
           ? "Validación por escaneo QR con firma capturada desde panel responsable."
-          : "Validación manual con firma capturada desde panel responsable.",
+          : `Registro manual por DNI/NIE ${selectedAttendee?.dniNie ?? ""} con firma capturada desde panel responsable.`,
         validacionVisual: true,
         firma: signature
       };
@@ -318,8 +401,70 @@ export default function ValidationPage() {
       <PageHeader
         overline="Puesto responsable"
         title="Validación asistente"
-        description="Escaneo QR, validación visual y firma capturada sobre la API operativa del entorno."
+        description="Escaneo QR, búsqueda manual por DNI/NIE, validación visual y firma capturada sobre la API operativa del entorno."
       />
+
+      <SectionCard
+        title="Búsqueda manual DNI/NIE"
+        description="Localiza al asistente por documento cuando el QR no está disponible."
+      >
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <input
+              value={manualDniQuery}
+              onChange={(event) => setManualDniQuery(event.target.value.toUpperCase())}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleManualDniSearch();
+                }
+              }}
+              placeholder="DNI/NIE, teléfono o nombre"
+              className="w-full rounded-[24px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-signal"
+            />
+            <button
+              type="button"
+              onClick={() => void handleManualDniSearch()}
+              disabled={isManualSearchLoading || manualDniQuery.trim().length < MIN_MANUAL_SEARCH_LENGTH}
+              className="rounded-full bg-ink px-6 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isManualSearchLoading ? "Buscando..." : "Buscar documento"}
+            </button>
+          </div>
+
+          {manualSearchError ? (
+            <div className="rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {manualSearchError}
+            </div>
+          ) : null}
+
+          {manualSearchMessage ? (
+            <div className="rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              {manualSearchMessage}
+            </div>
+          ) : null}
+
+          {manualSearchResults.length > 1 ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {manualSearchResults.map((attendee) => (
+                <button
+                  key={attendee.id}
+                  type="button"
+                  onClick={() => selectAttendeeForManual(attendee)}
+                  className="rounded-[24px] border border-slate-200 bg-white/80 p-4 text-left transition hover:-translate-y-0.5 hover:border-signal/50 hover:shadow-panel"
+                >
+                  <p className="font-semibold text-ink">
+                    {attendee.nombre} {attendee.apellidos}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    DNI {formatLookupValue(attendee.dniNie)} · {attendee.actividad ?? "Sin actividad"}
+                  </p>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </SectionCard>
 
       <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
         <SectionCard
@@ -425,9 +570,7 @@ export default function ValidationPage() {
                     key={attendee.id}
                     type="button"
                     onClick={() => {
-                      setSelectedAttendeeId(attendee.id);
-                      setResolvedQrSession(null);
-                      setValidationMessage(null);
+                      selectAttendeeForManual(attendee);
                     }}
                     className={`rounded-[28px] border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-panel ${
                       attendee.id === selectedAttendee?.id
