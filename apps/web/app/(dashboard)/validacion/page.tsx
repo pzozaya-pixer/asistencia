@@ -14,16 +14,41 @@ import {
 import { formatLookupValue } from "@/lib/utils";
 
 import { PageHeader } from "@/components/page-header";
-import { PlaceholderMedia } from "@/components/placeholder-media";
 import { SectionCard } from "@/components/section-card";
+import { SignaturePad } from "@/components/signature-pad";
 import { StatusBadge } from "@/components/status-badge";
 
-const checklist = [
-  "Coincidencia con listado de acceso.",
-  "Documento validado visualmente.",
-  "Firma comparada con el registro.",
-  "Incidencias previas revisadas."
-];
+const checklistItems = [
+  { id: "listado", label: "Coincidencia con listado de acceso." },
+  { id: "documento", label: "Documento validado visualmente." },
+  { id: "firma", label: "Firma cotejada por responsable." },
+  { id: "incidencias", label: "Incidencias previas revisadas." }
+] as const;
+
+const activityStatusLabels: Record<string, string> = {
+  activa: "Activa",
+  inscrito: "Inscrito",
+  confirmado: "Confirmado",
+  asistido: "Asistido",
+  ausente: "Ausente",
+  cancelado: "Cancelado",
+  incidencia: "Incidencia"
+};
+
+type ChecklistState = Record<(typeof checklistItems)[number]["id"], boolean>;
+
+type SignatureValue = {
+  dataUrl: string;
+  width: number;
+  height: number;
+};
+
+const initialChecklistState: ChecklistState = {
+  listado: false,
+  documento: false,
+  firma: false,
+  incidencias: false
+};
 
 export default function ValidationPage() {
   const searchParams = useSearchParams();
@@ -40,6 +65,9 @@ export default function ValidationPage() {
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [qrTokenInput, setQrTokenInput] = useState("");
   const [resolvedQrSession, setResolvedQrSession] = useState<ResolvedQrSession | null>(null);
+  const [checklistState, setChecklistState] = useState<ChecklistState>(initialChecklistState);
+  const [signature, setSignature] = useState<SignatureValue | null>(null);
+  const [signaturePadKey, setSignaturePadKey] = useState(0);
   const scannerRef = useRef<{
     isScanning: boolean;
     start: (
@@ -106,11 +134,16 @@ export default function ValidationPage() {
   }, []);
 
   useEffect(() => {
-    if (attendeeId) {
-      setSelectedAttendeeId(attendeeId);
-      setResolvedQrSession(null);
-      setValidationMessage(null);
+    if (!attendeeId) {
+      return;
     }
+
+    setSelectedAttendeeId(attendeeId);
+    setResolvedQrSession(null);
+    setValidationMessage(null);
+    setChecklistState(initialChecklistState);
+    setSignature(null);
+    setSignaturePadKey((current) => current + 1);
   }, [attendeeId]);
 
   useEffect(() => {
@@ -133,12 +166,15 @@ export default function ValidationPage() {
     [attendees, selectedAttendeeId]
   );
 
-  const attendeeName = selectedAttendee
-    ? `${selectedAttendee.nombre} ${selectedAttendee.apellidos}`
-    : "Sin asistente seleccionado";
-  const attendeeInitials = selectedAttendee
-    ? `${selectedAttendee.nombre.charAt(0)}${selectedAttendee.apellidos.charAt(0)}`
-    : "SA";
+  const allChecklistDone = checklistItems.every((item) => checklistState[item.id]);
+  const canSubmitManual = Boolean(selectedAttendee?.actividadId && selectedAttendee?.id);
+  const canSubmit = (resolvedQrSession ? true : canSubmitManual) && allChecklistDone && Boolean(signature);
+  const displayActivity = resolvedQrSession
+    ? `${resolvedQrSession.activity.codigo} · ${resolvedQrSession.activity.nombre}`
+    : (selectedAttendee?.actividad ?? "sin asignar");
+  const activityStatus = selectedAttendee?.estadoActividad
+    ? activityStatusLabels[selectedAttendee.estadoActividad] ?? selectedAttendee.estadoActividad
+    : "Pendiente";
 
   async function stopScanner() {
     const scanner = scannerRef.current;
@@ -217,33 +253,55 @@ export default function ValidationPage() {
   }
 
   async function handleValidate() {
+    if (!signature) {
+      setError("Debes capturar la firma antes de confirmar la asistencia.");
+      return;
+    }
+
+    if (!allChecklistDone) {
+      setError("Completa toda la validación visual antes de confirmar.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     setValidationMessage(null);
 
     try {
+      const payload = {
+        observaciones: resolvedQrSession
+          ? "Validación por escaneo QR con firma capturada desde panel responsable."
+          : "Validación manual con firma capturada desde panel responsable.",
+        validacionVisual: true,
+        firma: signature
+      };
+
       const record = resolvedQrSession
         ? await consumeQrAttendance({
             token: resolvedQrSession.token,
-            observaciones: "Validación por escaneo QR desde panel responsable."
+            ...payload
           })
         : await createAttendanceRecord({
             actividadId: selectedAttendee?.actividadId ?? "",
             asistenteId: selectedAttendee?.id ?? "",
             metodoRegistro: "manual",
-            observaciones: "Validación manual desde panel responsable."
+            ...payload
           });
 
       startTransition(() => {
         setValidationMessage(
           `${
-            resolvedQrSession ? "QR validado" : "Validación registrada"
-          } correctamente a las ${new Date(record.fechaHora).toLocaleTimeString("es-ES", {
+            resolvedQrSession ? "Acceso QR confirmado" : "Validación registrada"
+          } a las ${new Date(record.fechaHora).toLocaleTimeString("es-ES", {
             hour: "2-digit",
             minute: "2-digit"
-          })}.`
+          })} con firma asociada.`
         );
       });
+
+      setChecklistState(initialChecklistState);
+      setSignature(null);
+      setSignaturePadKey((current) => current + 1);
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -255,18 +313,12 @@ export default function ValidationPage() {
     }
   }
 
-  const canSubmitManual = Boolean(selectedAttendee?.actividadId && selectedAttendee?.id);
-  const canSubmit = resolvedQrSession ? true : canSubmitManual;
-  const displayActivity = resolvedQrSession
-    ? `${resolvedQrSession.activity.codigo} · ${resolvedQrSession.activity.nombre}`
-    : (selectedAttendee?.actividad ?? "sin asignar");
-
   return (
     <main className="space-y-6">
       <PageHeader
         overline="Puesto responsable"
         title="Validación asistente"
-        description="Escaneo QR o validación manual conectados a la API para registrar accesos reales del entorno."
+        description="Escaneo QR, validación visual y firma capturada sobre la API operativa del entorno."
       />
 
       <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
@@ -393,10 +445,12 @@ export default function ValidationPage() {
                           {formatLookupValue(attendee.telefono ?? "s/d")}
                         </p>
                         <p className="mt-1 text-sm text-slate-500">
-                          {attendee.actividad ?? "Sin actividad asignada"}
+                          {attendee.actividad ?? "Sin actividad asignada"} · Estado {activityStatusLabels[attendee.estadoActividad ?? ""] ?? "Pendiente"}
                         </p>
                       </div>
-                      <StatusBadge tone={resolvedQrSession?.attendee.id === attendee.id ? "success" : "warning"}>
+                      <StatusBadge
+                        tone={resolvedQrSession?.attendee.id === attendee.id ? "success" : "warning"}
+                      >
                         {resolvedQrSession?.attendee.id === attendee.id ? "QR listo" : "Revisión"}
                       </StatusBadge>
                     </div>
@@ -413,41 +467,67 @@ export default function ValidationPage() {
 
             {selectedAttendee ? (
               <>
-                <div className="flex items-start justify-between gap-3 rounded-[28px] border border-slate-200/70 bg-white/80 p-4">
-                  <div>
-                    <p className="font-semibold text-ink">{attendeeName}</p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      DNI {resolvedQrSession?.attendee.dniNie ?? selectedAttendee.dniNie} · Actividad{" "}
-                      {displayActivity}
-                    </p>
+                <div className="rounded-[28px] border border-slate-200/70 bg-white/80 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-ink">
+                        {selectedAttendee.nombre} {selectedAttendee.apellidos}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        DNI {resolvedQrSession?.attendee.dniNie ?? selectedAttendee.dniNie}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">Actividad {displayActivity}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <StatusBadge tone={resolvedQrSession ? "success" : "warning"}>
+                        {resolvedQrSession ? "Escaneo QR" : "Revisión manual"}
+                      </StatusBadge>
+                      <StatusBadge tone={selectedAttendee.hasPhoto ? "success" : "info"}>
+                        {selectedAttendee.hasPhoto ? "Foto registrada" : "Sin foto cargada"}
+                      </StatusBadge>
+                    </div>
                   </div>
-                  <StatusBadge tone={resolvedQrSession ? "success" : "warning"}>
-                    {resolvedQrSession ? "Escaneo QR" : "Revisión manual"}
-                  </StatusBadge>
+                  <div className="mt-4 rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+                    Estado operativo del asistente: <span className="font-semibold text-ink">{activityStatus}</span>
+                  </div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-[0.8fr_1.2fr]">
                   <div className="rounded-[30px] border border-cyan-200 bg-cyan-50/70 p-4">
                     <div className="mb-4">
-                      <p className="font-semibold text-ink">Foto registrada</p>
+                      <p className="font-semibold text-ink">Fotografía asistente</p>
                       <p className="text-sm text-slate-500">
-                        Reserva segura conectada a la ficha del asistente
+                        Vista de apoyo para validación visual en punto de acceso
                       </p>
                     </div>
                     <div className="flex aspect-[4/5] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-white/75 text-center">
                       <div>
                         <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-slate-900 text-2xl font-bold text-white">
-                          {attendeeInitials}
+                          {selectedAttendee.nombre.charAt(0)}
+                          {selectedAttendee.apellidos.charAt(0)}
                         </div>
-                        <p className="text-sm text-slate-500">Placeholder seguro</p>
+                        <p className="text-sm text-slate-500">
+                          {selectedAttendee.hasPhoto
+                            ? "Foto asociada en ficha"
+                            : "Pendiente de carga de fotografía"}
+                        </p>
                       </div>
                     </div>
                   </div>
-                  <PlaceholderMedia
-                    title="Firma registrada"
-                    subtitle="Reserva para firma digital"
-                    tone="coral"
-                  />
+
+                  <div className="rounded-[30px] border border-rose-200 bg-rose-50/70 p-4">
+                    <div className="mb-4">
+                      <p className="font-semibold text-ink">Firma capturada</p>
+                      <p className="text-sm text-slate-500">
+                        La firma se almacena junto al registro de asistencia validado.
+                      </p>
+                    </div>
+                    <SignaturePad
+                      key={signaturePadKey}
+                      disabled={isSubmitting}
+                      onChange={setSignature}
+                    />
+                  </div>
                 </div>
               </>
             ) : null}
@@ -457,47 +537,68 @@ export default function ValidationPage() {
 
       <SectionCard
         title="Checklist"
-        description="Secuencia de decisión operativa antes de registrar la validación manual o por QR."
+        description="Secuencia de decisión operativa antes de registrar la validación visual y la firma."
       >
         <div className="space-y-4">
           <div className="space-y-3">
-            {checklist.map((item) => (
-              <div
-                key={item}
-                className="flex items-center gap-3 rounded-3xl border border-slate-200/70 bg-slate-50/80 px-4 py-3 text-sm text-slate-700"
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-signal/10 font-semibold text-signal">
-                  OK
-                </span>
-                {item}
-              </div>
-            ))}
+            {checklistItems.map((item) => {
+              const isChecked = checklistState[item.id];
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() =>
+                    setChecklistState((current) => ({
+                      ...current,
+                      [item.id]: !current[item.id]
+                    }))
+                  }
+                  className={`flex w-full items-center gap-3 rounded-3xl border px-4 py-3 text-left text-sm transition ${
+                    isChecked
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : "border-slate-200/70 bg-slate-50/80 text-slate-700"
+                  }`}
+                >
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-full font-semibold ${
+                      isChecked ? "bg-emerald-600 text-white" : "bg-signal/10 text-signal"
+                    }`}
+                  >
+                    {isChecked ? "OK" : "?"}
+                  </span>
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
 
-          <button
-            type="button"
-            onClick={handleValidate}
-            disabled={isSubmitting || isLoading || !canSubmit}
-            className="w-full rounded-full bg-ink px-5 py-4 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {isSubmitting
-              ? "Registrando validación..."
-              : resolvedQrSession
-                ? "Confirmar acceso por QR"
-                : "Confirmar validación manual"}
-          </button>
+          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <div
+              className={`rounded-[28px] border p-4 text-sm ${
+                validationMessage
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-amber-200 bg-amber-50 text-amber-800"
+              }`}
+            >
+              {validationMessage ??
+                (resolvedQrSession
+                  ? "QR listo. Completa checklist y firma para confirmar el acceso final."
+                  : "La validación manual queda pendiente hasta completar checklist y firma.")}
+            </div>
 
-          <div
-            className={`rounded-[28px] border p-4 text-sm ${
-              validationMessage
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-amber-200 bg-amber-50 text-amber-800"
-            }`}
-          >
-            {validationMessage ??
-              (resolvedQrSession
-                ? "QR validado y pendiente únicamente de confirmación final del responsable."
-                : "Pendiente de validación manual por responsable. Al confirmar se registra en backend.")}
+            <button
+              type="button"
+              onClick={handleValidate}
+              disabled={isSubmitting || isLoading || !canSubmit}
+              className="rounded-full bg-ink px-6 py-4 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSubmitting
+                ? "Registrando validación..."
+                : resolvedQrSession
+                  ? "Confirmar acceso por QR"
+                  : "Confirmar validación manual"}
+            </button>
           </div>
         </div>
       </SectionCard>

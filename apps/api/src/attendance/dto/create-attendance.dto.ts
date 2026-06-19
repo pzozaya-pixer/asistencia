@@ -1,4 +1,30 @@
-import { IsIn, IsOptional, IsString } from "class-validator";
+import { Type } from "class-transformer";
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+  MinLength,
+  ValidateNested
+} from "class-validator";
+
+class SignaturePayloadDto {
+  @IsString()
+  @MinLength(32)
+  dataUrl!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  width!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  height!: number;
+}
 
 export class CreateAttendanceDto {
   @IsString()
@@ -13,5 +39,12 @@ export class CreateAttendanceDto {
   @IsOptional()
   @IsString()
   observaciones?: string;
-}
 
+  @Type(() => Boolean)
+  @IsBoolean()
+  validacionVisual!: boolean;
+
+  @ValidateNested()
+  @Type(() => SignaturePayloadDto)
+  firma!: SignaturePayloadDto;
+}

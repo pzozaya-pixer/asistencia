@@ -25,7 +25,9 @@ export type AttendeeLookupResult = {
   telefono?: string | null;
   nombre: string;
   apellidos: string;
+  hasPhoto: boolean;
   actividad?: string | null;
+  estadoActividad?: string | null;
   activities: Array<{
     id: string;
     codigo: string;
@@ -190,6 +192,12 @@ export async function createAttendanceRecord(payload: {
   asistenteId: string;
   metodoRegistro: "qr" | "manual";
   observaciones?: string;
+  validacionVisual: boolean;
+  firma: {
+    dataUrl: string;
+    width: number;
+    height: number;
+  };
 }) {
   const token = getStoredAccessToken();
 
@@ -297,6 +305,12 @@ export async function resolveQrSession(tokenValue: string) {
 export async function consumeQrAttendance(payload: {
   token: string;
   observaciones?: string;
+  validacionVisual: boolean;
+  firma: {
+    dataUrl: string;
+    width: number;
+    height: number;
+  };
 }) {
   const token = getStoredAccessToken();
 

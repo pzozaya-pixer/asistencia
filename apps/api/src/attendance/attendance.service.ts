@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
+import { PoolClient } from 'pg';
 import { AuthenticatedUser } from '../auth/token.service';
 import { DatabaseService } from '../database/database.service';
 import { QrSessionsService } from '../qr-sessions/qr-sessions.service';
@@ -11,6 +12,7 @@ type AttendanceRow = {
   id: string;
   actividadId: string;
   asistenteId: string;
+  firmaId: string | null;
   estado: string;
   metodoRegistro: string;
   fechaHora: string;
@@ -26,50 +28,57 @@ export class AttendanceService {
   ) {}
 
   async create(payload: CreateAttendanceDto, user: AuthenticatedUser) {
+    this.ensureVisualValidation(payload.validacionVisual);
     const responsableId = await this.usersService.findResponsableIdByUserId(user.id);
-    const hash = createHash('sha256')
-      .update(
+    return this.database.withTransaction(async (client) => {
+      const firmaId = await this.createInlineSignature(client, payload.firma);
+      const hash = createHash('sha256')
+        .update(
+          [
+            payload.actividadId,
+            payload.asistenteId,
+            payload.metodoRegistro,
+            payload.observaciones ?? '',
+            firmaId,
+            Date.now().toString(),
+          ].join(':'),
+        )
+        .digest('hex');
+
+      const result = await client.query<AttendanceRow>(
+        `
+          insert into registros_asistencia (
+            id, actividad_id, asistente_id, responsable_id, firma_id, metodo_registro,
+            estado, observaciones, hash_validacion
+          )
+          values (
+            $1, $2, $3, $4, $5, $6,
+            'validado', $7, $8
+          )
+          returning
+            id,
+            actividad_id as "actividadId",
+            asistente_id as "asistenteId",
+            firma_id as "firmaId",
+            estado,
+            metodo_registro as "metodoRegistro",
+            fecha_hora as "fechaHora",
+            observaciones
+        `,
         [
+          randomUUID(),
           payload.actividadId,
           payload.asistenteId,
+          responsableId ?? null,
+          firmaId,
           payload.metodoRegistro,
-          payload.observaciones ?? '',
-          Date.now().toString(),
-        ].join(':'),
-      )
-      .digest('hex');
+          payload.observaciones ?? null,
+          hash,
+        ],
+      );
 
-    const result = await this.database.query<AttendanceRow>(
-      `
-        insert into registros_asistencia (
-          id, actividad_id, asistente_id, responsable_id, metodo_registro,
-          estado, observaciones, hash_validacion
-        )
-        values (
-          $1, $2, $3, $4, $5,
-          'validado', $6, $7
-        )
-        returning
-          id,
-          actividad_id as "actividadId",
-          asistente_id as "asistenteId",
-          estado,
-          metodo_registro as "metodoRegistro",
-          fecha_hora as "fechaHora",
-          observaciones
-      `,
-      [
-        randomUUID(),
-        payload.actividadId,
-        payload.asistenteId,
-        responsableId ?? null,
-        payload.metodoRegistro,
-        payload.observaciones ?? null,
-        hash,
-      ],
-    );
-
-    return result.rows[0];
+      return result.rows[0];
+    });
   }
 
   async findAll() {
@@ -79,6 +88,7 @@ export class AttendanceService {
           id,
           actividad_id as "actividadId",
           asistente_id as "asistenteId",
+          firma_id as "firmaId",
           estado,
           metodo_registro as "metodoRegistro",
           fecha_hora as "fechaHora",
@@ -92,38 +102,41 @@ export class AttendanceService {
   }
 
   async consumeQr(payload: ConsumeQrAttendanceDto, user: AuthenticatedUser) {
+    this.ensureVisualValidation(payload.validacionVisual);
     const responsableId = await this.usersService.findResponsableIdByUserId(user.id);
     const session = await this.qrSessionsService.consume(payload.token);
-    const hash = createHash('sha256')
-      .update(
-        [
-          session.activityId,
-          session.attendeeId,
-          'qr',
-          payload.observaciones ?? '',
-          session.sessionId,
-          Date.now().toString(),
-        ].join(':'),
-      )
-      .digest('hex');
 
-    await this.database.query('begin');
+    return this.database.withTransaction(async (client) => {
+      const firmaId = await this.createInlineSignature(client, payload.firma);
+      const hash = createHash('sha256')
+        .update(
+          [
+            session.activityId,
+            session.attendeeId,
+            'qr',
+            payload.observaciones ?? '',
+            session.sessionId,
+            firmaId,
+            Date.now().toString(),
+          ].join(':'),
+        )
+        .digest('hex');
 
-    try {
-      const result = await this.database.query<AttendanceRow>(
+      const result = await client.query<AttendanceRow>(
         `
           insert into registros_asistencia (
-            id, actividad_id, asistente_id, responsable_id, metodo_registro,
+            id, actividad_id, asistente_id, responsable_id, firma_id, metodo_registro,
             estado, observaciones, hash_validacion, qr_session_id
           )
           values (
-            $1, $2, $3, $4, 'qr',
-            'validado', $5, $6, $7
+            $1, $2, $3, $4, $5, 'qr',
+            'validado', $6, $7, $8
           )
           returning
             id,
             actividad_id as "actividadId",
             asistente_id as "asistenteId",
+            firma_id as "firmaId",
             estado,
             metodo_registro as "metodoRegistro",
             fecha_hora as "fechaHora",
@@ -134,13 +147,14 @@ export class AttendanceService {
           session.activityId,
           session.attendeeId,
           responsableId ?? null,
+          firmaId,
           payload.observaciones ?? 'Validación por escaneo QR desde panel responsable.',
           hash,
           session.sessionId,
         ],
       );
 
-      await this.database.query(
+      await client.query(
         `
           update sesiones_qr
           set usado = true,
@@ -150,12 +164,42 @@ export class AttendanceService {
         [session.sessionId],
       );
 
-      await this.database.query('commit');
-
       return result.rows[0];
-    } catch (error) {
-      await this.database.query('rollback');
-      throw error;
+    });
+  }
+
+  private ensureVisualValidation(validacionVisual: boolean) {
+    if (!validacionVisual) {
+      throw new BadRequestException(
+        'Debes completar la validación visual antes de confirmar la asistencia.',
+      );
     }
+  }
+
+  private async createInlineSignature(
+    client: PoolClient,
+    firma: {
+      dataUrl: string;
+      width: number;
+      height: number;
+    },
+  ) {
+    if (!firma.dataUrl.startsWith('data:image/png;base64,')) {
+      throw new BadRequestException('La firma debe enviarse como PNG en base64.');
+    }
+
+    const hash = createHash('sha256').update(firma.dataUrl).digest('hex');
+    const result = await client.query<{ id: string }>(
+      `
+        insert into firmas (
+          id, archivo_id, formato, ancho, alto, hash_firma, data_url
+        )
+        values ($1, null, 'image/png', $2, $3, $4, $5)
+        returning id
+      `,
+      [randomUUID(), firma.width, firma.height, hash, firma.dataUrl],
+    );
+
+    return result.rows[0]?.id ?? null;
   }
 }

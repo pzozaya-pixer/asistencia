@@ -7,6 +7,7 @@ type AttendeeRow = {
   telefono: string | null;
   nombre: string;
   apellidos: string;
+  hasPhoto: boolean;
   activities: Array<{
     id: string;
     codigo: string;
@@ -29,6 +30,7 @@ export class AttendeesService {
           a.telefono,
           a.nombre,
           a.apellidos,
+          (a.foto_archivo_id is not null) as "hasPhoto",
           coalesce(
             json_agg(
               distinct jsonb_build_object(
@@ -49,7 +51,7 @@ export class AttendeesService {
             or concat_ws(' ', a.dni_nie, coalesce(a.telefono, ''), a.nombre, a.apellidos)
               ilike '%' || $1 || '%'
           )
-        group by a.id, a.dni_nie, a.telefono, a.nombre, a.apellidos
+        group by a.id, a.dni_nie, a.telefono, a.nombre, a.apellidos, a.foto_archivo_id
         order by a.apellidos asc, a.nombre asc
         limit 20
       `,
@@ -68,6 +70,7 @@ export class AttendeesService {
         activities,
         actividadId: preferredActivity?.id ?? null,
         actividad: preferredActivity?.nombre ?? null,
+        estadoActividad: preferredActivity?.estado ?? null,
       };
     });
   }

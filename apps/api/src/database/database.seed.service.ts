@@ -82,7 +82,20 @@ export class DatabaseSeedService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    await this.applyRuntimeMigrations();
     await this.ensureDemoData();
+  }
+
+  private async applyRuntimeMigrations() {
+    await this.database.query(`
+      alter table if exists firmas
+      alter column archivo_id drop not null
+    `);
+
+    await this.database.query(`
+      alter table if exists firmas
+      add column if not exists data_url text
+    `);
   }
 
   private async ensureDemoData() {
