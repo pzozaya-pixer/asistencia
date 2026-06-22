@@ -42,6 +42,10 @@ export class AttendeesService {
 
   async findAll(query?: string) {
     const normalizedQuery = query?.trim();
+    const compactQuery = normalizedQuery
+      ?.toUpperCase()
+      .replace(/[^A-Z0-9]/g, '');
+    const digitsQuery = normalizedQuery?.replace(/\D/g, '');
     const result = await this.database.query<AttendeeRow>(
       `
         select
@@ -79,6 +83,10 @@ export class AttendeesService {
             $1::text is null
             or concat_ws(' ', a.dni_nie, coalesce(a.telefono, ''), a.nombre, a.apellidos)
               ilike '%' || $1 || '%'
+            or regexp_replace(upper(a.dni_nie), '[^A-Z0-9]', '', 'g')
+              like '%' || $2 || '%'
+            or regexp_replace(coalesce(a.telefono, ''), '\D', '', 'g')
+              like '%' || $3 || '%'
           )
         group by
           a.id,
@@ -95,7 +103,7 @@ export class AttendeesService {
         order by a.apellidos asc, a.nombre asc
         limit 20
       `,
-      [normalizedQuery ?? null],
+      [normalizedQuery ?? null, compactQuery ?? null, digitsQuery ?? null],
     );
 
     return result.rows.map((row) => this.mapAttendeeRow(row));
