@@ -7,7 +7,7 @@ function LoginCard() {
       <div className="space-y-4">
         <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm text-slate-500">Email</p>
-          <p className="mt-1 text-base font-medium text-ink">responsable@demo.local</p>
+          <p className="mt-1 text-base font-medium text-ink">responsable</p>
         </div>
         <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm text-slate-500">Estado</p>
@@ -143,12 +143,12 @@ export function AppShell() {
       <header className="rounded-[2rem] bg-ink px-6 py-8 text-white shadow-float">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <p className="text-sm uppercase tracking-[0.3em] text-white/60">Demo operativa</p>
+            <p className="text-sm uppercase tracking-[0.3em] text-white/60">Operativa activa</p>
             <h1 className="mt-3 text-4xl font-semibold leading-tight md:text-5xl">
               Plataforma PWA de control de asistencia lista para escalar.
             </h1>
             <p className="mt-4 max-w-xl text-base text-white/72">
-              La demo cubre panel administrativo, PWA de asistente, validación responsable y flujo de firma,
+              La plataforma cubre panel administrativo, PWA de asistente, validación responsable y flujo de firma,
               preparada para conectar con Supabase, MinIO y automatizaciones n8n.
             </p>
           </div>
@@ -171,4 +171,3 @@ export function AppShell() {
     </main>
   );
 }
-

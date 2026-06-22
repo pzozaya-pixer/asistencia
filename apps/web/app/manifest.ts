@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Asistencia Demo",
+    name: "Asistencia",
     short_name: "Asistencia",
     description: "PWA de control de asistencia para asistentes y responsables",
     id: "/asistente",

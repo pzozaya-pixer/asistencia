@@ -13,8 +13,8 @@ import {
 
 export function LoginCard() {
   const router = useRouter();
-  const [email, setEmail] = useState("responsable@demo.local");
-  const [password, setPassword] = useState("responsable123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,14 +107,6 @@ export function LoginCard() {
             className="w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm text-ink outline-none transition focus:border-signal focus:ring-4 focus:ring-signal/10"
           />
         </label>
-
-        <div className="rounded-[28px] border border-cyan-100 bg-cyan-50/80 px-4 py-3 text-sm text-cyan-900">
-          <p className="font-semibold text-cyan-950">Credenciales demo activas</p>
-          <p className="mt-1">admin@demo.local / admin123</p>
-          <p>responsable@demo.local / responsable123</p>
-          <p>operador@demo.local / operador123</p>
-        </div>
-
         {error ? (
           <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {error}

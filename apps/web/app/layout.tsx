@@ -3,14 +3,14 @@ import { PWAProvider } from "@/components/pwa-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Asistencia Demo",
+  title: "Asistencia",
   description: "Plataforma PWA de control de asistencia",
-  applicationName: "Asistencia Demo",
+  applicationName: "Asistencia",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Asistencia Demo"
+    title: "Asistencia"
   }
 };
 

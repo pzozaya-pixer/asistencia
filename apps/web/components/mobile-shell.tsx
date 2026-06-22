@@ -36,7 +36,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
         <header className="grid gap-4 rounded-[32px] border border-slate-200/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-4 text-white lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200">
-              Asistencia Demo
+              Asistencia
             </p>
             <p className="font-[family:var(--font-heading)] text-2xl font-bold sm:text-3xl">
               Operación rápida en acceso
