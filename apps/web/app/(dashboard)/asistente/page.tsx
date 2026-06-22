@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import {
@@ -12,10 +11,11 @@ import {
 } from "@/lib/auth";
 import { formatLookupValue } from "@/lib/utils";
 
-import { PageHeader } from "@/components/page-header";
-import { SearchInput } from "@/components/search-input";
-import { SectionCard } from "@/components/section-card";
-import { StatusBadge } from "@/components/status-badge";
+const steps = [
+  "Localiza tu inscripción",
+  "Elige la actividad",
+  "Muestra tu QR al responsable"
+] as const;
 
 export default function AttendeePage() {
   const [query, setQuery] = useState("");
@@ -73,7 +73,7 @@ export default function AttendeePage() {
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "No se pudo cargar la búsqueda."
+            : "No se pudo consultar tu inscripción."
         );
       } finally {
         if (!cancelled) {
@@ -119,9 +119,9 @@ export default function AttendeePage() {
         const nextImageUrl = await QRCode.toDataURL(currentSession.token, {
           errorCorrectionLevel: "M",
           margin: 1,
-          width: 320,
+          width: 360,
           color: {
-            dark: "#0f172a",
+            dark: "#123044",
             light: "#ffffff"
           }
         });
@@ -131,7 +131,7 @@ export default function AttendeePage() {
         }
       } catch {
         if (!cancelled) {
-          setError("No se pudo renderizar el QR temporal.");
+          setError("No se pudo generar tu credencial QR.");
           setQrImageUrl(null);
         }
       }
@@ -209,7 +209,7 @@ export default function AttendeePage() {
 
   async function handleGenerateQr() {
     if (!selectedAttendee || !selectedActivity) {
-      setError("Selecciona un asistente y una actividad antes de generar el QR.");
+      setError("Selecciona tu actividad antes de generar el código.");
       return;
     }
 
@@ -229,7 +229,7 @@ export default function AttendeePage() {
       setError(
         generationError instanceof Error
           ? generationError.message
-          : "No se pudo generar el QR temporal."
+          : "No se pudo generar tu credencial temporal."
       );
     } finally {
       setIsGenerating(false);
@@ -237,215 +237,278 @@ export default function AttendeePage() {
   }
 
   return (
-    <main className="space-y-6">
-      <PageHeader
-        overline="Flujo asistente"
-        title="Búsqueda y emisión QR"
-        description="Demo segura: la vista nunca expone un código real ni datos sensibles completos."
-      />
+    <main className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-5xl flex-col gap-6">
+      <section className="overflow-hidden rounded-[36px] border border-cyan-100 bg-[radial-gradient(circle_at_top_left,_rgba(82,174,204,0.24),_transparent_38%),linear-gradient(135deg,#f7fbff_0%,#eef8ff_42%,#fffaf2_100%)] p-5 shadow-panel sm:p-7">
+        <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="space-y-5">
+            <div className="inline-flex rounded-full border border-cyan-200 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-900">
+              PWA asistente
+            </div>
+            <div className="space-y-3">
+              <h1 className="font-[family:var(--font-heading)] text-4xl font-bold leading-tight text-slate-950 sm:text-5xl">
+                Tu credencial de acceso en el móvil.
+              </h1>
+              <p className="max-w-xl text-base leading-7 text-slate-600">
+                Busca tu inscripción, elige la actividad y muestra tu código QR al llegar.
+                El responsable validará tu identidad y recogerá la firma de asistencia.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {steps.map((step, index) => (
+                <div
+                  key={step}
+                  className="rounded-[26px] border border-white/70 bg-white/72 p-4 backdrop-blur"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">
+                    Paso {index + 1}
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{step}</p>
+                </div>
+              ))}
+            </div>
+          </div>
 
-      <SectionCard
-        title="Buscar por DNI o teléfono"
-        description="La búsqueda consulta asistentes reales del entorno y prepara el siguiente paso de QR temporal."
-      >
-        <div className="space-y-4">
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder="Ej. 12345678A o 600123456"
-          />
-          {error ? (
-            <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              {error}
+          <div className="rounded-[32px] border border-slate-900/10 bg-slate-950 p-5 text-white shadow-panel">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200">
+                  Acceso temporal
+                </p>
+                <h2 className="mt-2 font-[family:var(--font-heading)] text-2xl font-bold">
+                  Código QR activo
+                </h2>
+              </div>
+              <div className={`rounded-full px-3 py-1 text-xs font-semibold ${secondsLeft > 0 ? "bg-emerald-400/15 text-emerald-100" : "bg-amber-300/15 text-amber-100"}`}>
+                {secondsLeft > 0 ? `${secondsLeft}s` : "Sin emitir"}
+              </div>
             </div>
-          ) : null}
-          {!isLoading &&
-          !error &&
-          deferredQuery.trim().length > 0 &&
-          deferredQuery.trim().length < 5 ? (
-            <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              Escribe al menos 5 caracteres para buscar por DNI o teléfono.
+
+            <div className="mt-5 rounded-[28px] bg-white p-5 text-slate-950">
+              <div className="mx-auto flex aspect-square max-w-[320px] items-center justify-center rounded-[28px] border border-dashed border-slate-300 bg-slate-50 p-4">
+                {qrImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={qrImageUrl}
+                    alt="Código QR temporal de acceso"
+                    className="h-full w-full rounded-[20px] object-contain"
+                  />
+                ) : (
+                  <div className="space-y-2 text-center">
+                    <p className="text-base font-semibold text-slate-900">
+                      Tu QR aparecerá aquí
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      Genera la credencial cuando estés listo para acceder.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-          ) : null}
-          <div className="grid gap-3 lg:grid-cols-[0.95fr_1.05fr]">
+
+            <p className="mt-4 text-sm leading-6 text-slate-300">
+              {qrSession && selectedActivity
+                ? `Código emitido para ${selectedActivity.codigo} hasta las ${new Date(
+                    qrSession.expiresAt
+                  ).toLocaleTimeString("es-ES", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit"
+                  })}.`
+                : "El QR es temporal, firmado y no muestra tus datos personales en pantalla."}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+        <div className="rounded-[34px] border border-slate-200/80 bg-white/88 p-5 shadow-panel backdrop-blur sm:p-6">
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-cyan-700">
+                1. Busca tu inscripción
+              </p>
+              <h2 className="mt-2 font-[family:var(--font-heading)] text-2xl font-bold text-slate-950">
+                DNI, NIE o teléfono
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Introduce al menos 5 caracteres para encontrar tu ficha y continuar.
+              </p>
+            </div>
+
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Tu documento o teléfono</span>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Ej. 12345678A o 600123456"
+                className="w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4 text-base text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
+              />
+            </label>
+
+            {error ? (
+              <div className="rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {error}
+              </div>
+            ) : null}
+
+            {!isLoading &&
+            !error &&
+            deferredQuery.trim().length > 0 &&
+            deferredQuery.trim().length < 5 ? (
+              <div className="rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Escribe al menos 5 caracteres para continuar.
+              </div>
+            ) : null}
+
             <div className="space-y-3">
               {isLoading ? (
-                <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 p-6 text-sm text-slate-500">
-                  Cargando asistentes...
+                <div className="rounded-[26px] border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
+                  Buscando inscripciones...
                 </div>
               ) : null}
+
               {results.map((attendee) => (
                 <button
                   key={attendee.id}
                   type="button"
                   onClick={() => setSelectedAttendeeId(attendee.id)}
-                  className="w-full rounded-[28px] border border-slate-200/70 bg-white/80 p-4 text-left transition hover:-translate-y-0.5 hover:border-signal/50 hover:shadow-panel"
+                  className={`w-full rounded-[26px] border p-4 text-left transition ${
+                    attendee.id === selectedAttendeeId
+                      ? "border-cyan-300 bg-cyan-50 shadow-sm"
+                      : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-cyan-200"
+                  }`}
                 >
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="font-semibold text-ink">
-                      {attendee.nombre} {attendee.apellidos}
-                    </p>
-                    <StatusBadge tone="success">Disponible</StatusBadge>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-950">
+                        {attendee.nombre} {attendee.apellidos}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        DNI {formatLookupValue(attendee.dniNie)} · Tel.{" "}
+                        {formatLookupValue(attendee.telefono ?? "s/d")}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold text-white">
+                      Elegir
+                    </span>
                   </div>
-                  <p className="text-sm text-slate-500">
-                    DNI {formatLookupValue(attendee.dniNie)} · Tel.{" "}
-                    {formatLookupValue(attendee.telefono ?? "s/d")}
-                  </p>
                 </button>
               ))}
+
               {!isLoading && results.length === 0 ? (
-                <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 p-6 text-sm text-slate-500">
-                  No hay coincidencias en la base actual.
+                <div className="rounded-[26px] border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
+                  No encontramos ninguna coincidencia con esos datos.
                 </div>
               ) : null}
             </div>
-
-              <div className="rounded-[32px] border border-slate-200/70 bg-slate-950 p-5 text-white shadow-panel">
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200">
-                    Credencial temporal
-                  </p>
-                  <h2 className="mt-2 font-[family:var(--font-heading)] text-2xl font-bold">
-                    QR firmado de acceso
-                  </h2>
-                </div>
-                <StatusBadge tone={secondsLeft > 0 ? "success" : "warning"}>
-                  {secondsLeft > 0 ? `${secondsLeft}s` : "Pendiente"}
-                </StatusBadge>
-              </div>
-
-              {selectedAttendee ? (
-                <div className="space-y-4">
-                  <div className="rounded-[28px] border border-white/10 bg-white/5 p-4">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-900/80">
-                        {photoObjectUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={photoObjectUrl}
-                            alt={`Fotografía de ${selectedAttendee.nombre} ${selectedAttendee.apellidos}`}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-sm font-bold text-white">
-                            {selectedAttendee.nombre.charAt(0)}
-                            {selectedAttendee.apellidos.charAt(0)}
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-lg font-semibold">
-                          {selectedAttendee.nombre} {selectedAttendee.apellidos}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-300">
-                          {selectedAttendee.actividad
-                            ? `Actividad actual: ${selectedAttendee.actividad}`
-                            : "Sin actividad asociada en la demo actual"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-3 rounded-[28px] border border-white/10 bg-white/5 p-4">
-                    <div>
-                      <p className="text-sm font-semibold text-white">Actividad de acceso</p>
-                      <p className="mt-1 text-sm text-slate-300">
-                        Selecciona la actividad sobre la que se emitirá el QR temporal.
-                      </p>
-                    </div>
-                    <div className="grid gap-2">
-                      {selectedAttendee.activities.map((activity) => (
-                        <button
-                          key={activity.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedActivityId(activity.id);
-                            setQrSession(null);
-                            setQrImageUrl(null);
-                            setSecondsLeft(0);
-                          }}
-                          className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                            activity.id === selectedActivityId
-                              ? "border-cyan-200 bg-cyan-300/15 text-white"
-                              : "border-white/10 bg-white/5 text-slate-200 hover:border-cyan-200/40"
-                          }`}
-                        >
-                          <p className="font-semibold">
-                            {activity.codigo} · {activity.nombre}
-                          </p>
-                          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">
-                            Estado {activity.estado}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                    {selectedAttendee.activities.length === 0 ? (
-                      <div className="rounded-2xl border border-amber-200/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
-                        Este asistente no tiene actividades asociadas para emitir QR.
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleGenerateQr}
-                    disabled={isGenerating || !selectedActivity}
-                    className="flex w-full items-center justify-center rounded-full bg-white px-5 py-3.5 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {isGenerating ? "Generando QR temporal..." : "Generar QR temporal"}
-                  </button>
-
-                  <div className="mx-auto flex aspect-square max-w-[320px] items-center justify-center rounded-[32px] border border-dashed border-cyan-200/30 bg-white p-5 text-slate-900">
-                    {qrImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={qrImageUrl}
-                        alt="QR temporal de acceso"
-                        className="h-full w-full rounded-[24px] object-contain"
-                      />
-                    ) : (
-                      <div className="space-y-2 text-center">
-                        <p className="text-sm font-semibold text-slate-700">
-                          Aún no se ha emitido ningún QR
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          Genera una credencial temporal segura desde backend.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="rounded-[28px] border border-cyan-200/15 bg-cyan-300/10 p-4 text-sm text-cyan-50">
-                    {qrSession && selectedActivity
-                      ? `QR emitido para ${selectedActivity.codigo} con expiración a las ${new Date(
-                          qrSession.expiresAt
-                        ).toLocaleTimeString("es-ES", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit"
-                        })}. El token no expone datos personales visibles.`
-                      : "El QR se emite como token firmado de vida corta y queda persistido en PostgreSQL para su consumo posterior."}
-                  </div>
-                  <Link
-                    href={
-                      selectedActivity
-                        ? `/validacion?asistenteId=${selectedAttendee.id}`
-                        : "/validacion"
-                    }
-                    className="flex w-full items-center justify-center rounded-full bg-white px-5 py-3.5 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:bg-slate-100"
-                  >
-                    Pasar a validación manual
-                  </Link>
-                </div>
-              ) : (
-                <div className="rounded-[28px] border border-dashed border-white/20 p-8 text-sm text-slate-300">
-                  Selecciona un asistente para generar el placeholder.
-                </div>
-              )}
-            </div>
           </div>
         </div>
-      </SectionCard>
+
+        <div className="rounded-[34px] border border-slate-200/80 bg-white/88 p-5 shadow-panel backdrop-blur sm:p-6">
+          {selectedAttendee ? (
+            <div className="space-y-5">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-cyan-700">
+                  2. Revisa tus datos
+                </p>
+                <h2 className="mt-2 font-[family:var(--font-heading)] text-2xl font-bold text-slate-950">
+                  Confirma la actividad
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-4 rounded-[28px] border border-slate-200 bg-slate-50 p-4">
+                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-[24px] bg-slate-950 text-lg font-bold text-white">
+                  {photoObjectUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={photoObjectUrl}
+                      alt={`Fotografía de ${selectedAttendee.nombre} ${selectedAttendee.apellidos}`}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <>
+                      {selectedAttendee.nombre.charAt(0)}
+                      {selectedAttendee.apellidos.charAt(0)}
+                    </>
+                  )}
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-slate-950">
+                    {selectedAttendee.nombre} {selectedAttendee.apellidos}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Documento {formatLookupValue(selectedAttendee.dniNie)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-900">Tus actividades disponibles</p>
+                {selectedAttendee.activities.map((activity) => (
+                  <button
+                    key={activity.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedActivityId(activity.id);
+                      setQrSession(null);
+                      setQrImageUrl(null);
+                      setSecondsLeft(0);
+                    }}
+                    className={`w-full rounded-[24px] border px-4 py-4 text-left transition ${
+                      activity.id === selectedActivityId
+                        ? "border-cyan-300 bg-cyan-50"
+                        : "border-slate-200 bg-white hover:border-cyan-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-950">
+                          {activity.codigo} · {activity.nombre}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Estado {activity.estado}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          activity.id === selectedActivityId
+                            ? "bg-cyan-700 text-white"
+                            : "bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {activity.id === selectedActivityId ? "Seleccionada" : "Elegir"}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {selectedAttendee.activities.length === 0 ? (
+                <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  No tienes actividades disponibles para generar credencial.
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={handleGenerateQr}
+                disabled={isGenerating || !selectedActivity}
+                className="w-full rounded-full bg-slate-950 px-5 py-4 text-base font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isGenerating ? "Generando tu código..." : "Generar mi QR de acceso"}
+              </button>
+
+              <div className="rounded-[24px] border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm leading-6 text-cyan-950">
+                Muestra este QR al llegar. Después el responsable comprobará tu identidad y registrará la asistencia.
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-full min-h-[420px] items-center justify-center rounded-[30px] border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
+              Busca tu inscripción para continuar con la generación del código.
+            </div>
+          )}
+        </div>
+      </section>
     </main>
   );
 }
