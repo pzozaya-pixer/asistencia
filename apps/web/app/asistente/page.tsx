@@ -1,11 +1,12 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { InstallPwaCard } from "@/components/install-pwa-card";
 import {
   createPublicQrSession,
   searchPublicAttendees,
+  uploadPublicAttendeePhoto,
   type AttendeeLookupResult,
   type QrSessionResponse
 } from "@/lib/auth";
@@ -47,6 +48,9 @@ export default function PublicAttendeePage() {
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
   const [photoObjectUrl, setPhotoObjectUrl] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const deferredQuery = useDeferredValue(query);
   const normalizedDeferredQuery = useMemo(
     () => normalizeLookupQuery(deferredQuery),
@@ -236,6 +240,11 @@ export default function PublicAttendeePage() {
       return;
     }
 
+    if (!selectedAttendee.hasPhoto) {
+      setError("Antes de generar el QR debes subir una fotografía.");
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
     setQrSession(null);
@@ -256,6 +265,48 @@ export default function PublicAttendeePage() {
       );
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function handlePhotoSelected(file: File | null) {
+    if (!file || !selectedAttendee) {
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    setError(null);
+
+    try {
+      const uploaded = await uploadPublicAttendeePhoto(selectedAttendee.id, file);
+
+      setResults((current) =>
+        current.map((attendee) =>
+          attendee.id === selectedAttendee.id
+            ? {
+                ...attendee,
+                hasPhoto: true,
+                photoUrl: uploaded.photoUrl
+              }
+            : attendee
+        )
+      );
+      setPhotoObjectUrl(uploaded.photoUrl);
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "No se pudo subir la fotografía del asistente."
+      );
+    } finally {
+      setIsUploadingPhoto(false);
+
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = "";
+      }
+
+      if (galleryInputRef.current) {
+        galleryInputRef.current.value = "";
+      }
     }
   }
 
@@ -513,10 +564,61 @@ export default function PublicAttendeePage() {
                 </div>
               ) : null}
 
+              {!selectedAttendee.hasPhoto ? (
+                <div className="space-y-4 rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+                  <div>
+                    <p className="font-semibold text-amber-950">Falta tu fotografía</p>
+                    <p className="mt-2 leading-6">
+                      Antes de generar el QR, hazte una foto con la cámara frontal o súbela desde
+                      tu galería.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => cameraInputRef.current?.click()}
+                      disabled={isUploadingPhoto}
+                      className="rounded-full bg-slate-950 px-5 py-3 font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {isUploadingPhoto ? "Subiendo foto..." : "Usar cámara frontal"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => galleryInputRef.current?.click()}
+                      disabled={isUploadingPhoto}
+                      className="rounded-full border border-slate-300 bg-white px-5 py-3 font-semibold text-slate-900 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      Elegir de galería
+                    </button>
+                  </div>
+
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    capture="user"
+                    className="hidden"
+                    onChange={(event) =>
+                      void handlePhotoSelected(event.target.files?.[0] ?? null)
+                    }
+                  />
+                  <input
+                    ref={galleryInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(event) =>
+                      void handlePhotoSelected(event.target.files?.[0] ?? null)
+                    }
+                  />
+                </div>
+              ) : null}
+
               <button
                 type="button"
                 onClick={handleGenerateQr}
-                disabled={isGenerating || !selectedActivity}
+                disabled={isGenerating || isUploadingPhoto || !selectedActivity || !selectedAttendee.hasPhoto}
                 className="w-full rounded-full bg-slate-950 px-5 py-4 text-base font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isGenerating ? "Generando tu código..." : "Generar mi QR de acceso"}

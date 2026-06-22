@@ -720,6 +720,27 @@ export async function uploadAttendeePhoto(attendeeId: string, file: File) {
   };
 }
 
+export async function uploadPublicAttendeePhoto(attendeeId: string, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`/api/attendees/${attendeeId}/public-photo`, {
+    method: "POST",
+    cache: "no-store",
+    body: formData
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as {
+    fileId: string;
+    photoUrl: string;
+  };
+}
+
 export async function fetchProtectedAsset(url: string) {
   const token = getStoredAccessToken();
 

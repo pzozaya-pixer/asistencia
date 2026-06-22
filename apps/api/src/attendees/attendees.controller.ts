@@ -37,6 +37,17 @@ export class AttendeesController {
     return this.attendeesService.findAll(query.q);
   }
 
+  @Public()
+  @Post(':id/public-photo')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadPublicPhoto(
+    @Param('id') id: string,
+    @UploadedFile()
+    file: { buffer: Buffer; originalname: string; mimetype: string } | undefined,
+  ) {
+    return this.attendeesService.uploadPublicPhoto(id, file);
+  }
+
   @Post(':id/photo')
   @Roles(Role.SuperAdmin, Role.Responsable)
   @UseInterceptors(FileInterceptor('file'))

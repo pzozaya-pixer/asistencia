@@ -124,6 +124,49 @@ export class AttendeesService {
     file: { buffer: Buffer; originalname: string; mimetype: string } | undefined,
     user: AuthenticatedUser,
   ) {
+    return this.persistPhotoUpload(attendeeId, file, user.id);
+  }
+
+  async uploadPublicPhoto(
+    attendeeId: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string } | undefined,
+  ) {
+    const attendeeWithPhoto = await this.database.query<{
+      id: string;
+      hasPhoto: boolean;
+    }>(
+      `
+        select
+          id,
+          (foto_archivo_id is not null) as "hasPhoto"
+        from asistentes
+        where id = $1
+          and deleted_at is null
+        limit 1
+      `,
+      [attendeeId],
+    );
+
+    const attendee = attendeeWithPhoto.rows[0];
+
+    if (!attendee) {
+      throw new NotFoundException('Asistente no encontrado.');
+    }
+
+    if (attendee.hasPhoto) {
+      throw new BadRequestException(
+        'Este asistente ya tiene una fotografía cargada.',
+      );
+    }
+
+    return this.persistPhotoUpload(attendeeId, file, null);
+  }
+
+  private async persistPhotoUpload(
+    attendeeId: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string } | undefined,
+    uploadedBy: string | null,
+  ) {
     if (!file?.buffer?.length) {
       throw new BadRequestException('Debes subir una imagen válida.');
     }
@@ -177,7 +220,7 @@ export class AttendeesService {
           file.mimetype,
           uploaded.size,
           uploaded.checksum,
-          user.id,
+          uploadedBy,
         ],
       );
 
@@ -194,7 +237,7 @@ export class AttendeesService {
 
     return {
       fileId,
-      photoUrl: `/api/attendees/${attendeeId}/photo`,
+      photoUrl: (await this.getPhotoUrl(attendeeId)).photoUrl,
     };
   }
 
