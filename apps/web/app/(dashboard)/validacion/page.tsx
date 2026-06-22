@@ -59,6 +59,7 @@ export default function ValidationPage() {
 
   const [attendees, setAttendees] = useState<AttendeeLookupResult[]>([]);
   const [selectedAttendeeId, setSelectedAttendeeId] = useState<string | null>(attendeeId);
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResolvingQr, setIsResolvingQr] = useState(false);
@@ -176,8 +177,25 @@ export default function ValidationPage() {
     [attendees, selectedAttendeeId]
   );
 
+  useEffect(() => {
+    if (!selectedAttendee) {
+      setSelectedActivityId(null);
+      return;
+    }
+
+    const preferredActivityId =
+      selectedAttendee.activities.find((activity) => activity.estado === "activa")?.id ??
+      selectedAttendee.actividadId ??
+      selectedAttendee.activities[0]?.id ??
+      null;
+
+    setSelectedActivityId(preferredActivityId);
+  }, [selectedAttendee?.id]);
+
   const allChecklistDone = checklistItems.every((item) => checklistState[item.id]);
-  const canSubmitManual = Boolean(selectedAttendee?.actividadId && selectedAttendee?.id);
+  const selectedManualActivity =
+    selectedAttendee?.activities.find((activity) => activity.id === selectedActivityId) ?? null;
+  const canSubmitManual = Boolean(selectedManualActivity?.id && selectedAttendee?.id);
   const canSubmit =
     (resolvedQrSession ? true : canSubmitManual) &&
     allChecklistDone &&
@@ -185,7 +203,9 @@ export default function ValidationPage() {
     Boolean(selectedAttendanceDate);
   const displayActivity = resolvedQrSession
     ? `${resolvedQrSession.activity.codigo} · ${resolvedQrSession.activity.nombre}`
-    : (selectedAttendee?.actividad ?? "sin asignar");
+    : (selectedManualActivity
+        ? `${selectedManualActivity.codigo} · ${selectedManualActivity.nombre}`
+        : selectedAttendee?.actividad ?? "sin asignar");
   const activityStatus = selectedAttendee?.estadoActividad
     ? activityStatusLabels[selectedAttendee.estadoActividad] ?? selectedAttendee.estadoActividad
     : "Pendiente";
@@ -234,7 +254,7 @@ export default function ValidationPage() {
         fechaInicio: resolvedQrSession.activity.fechaInicio,
         fechaFin: resolvedQrSession.activity.fechaFin
       }
-    : selectedAttendee?.activities.find((activity) => activity.id === selectedAttendee.actividadId) ?? null;
+    : selectedManualActivity ?? null;
 
   const attendanceDateOptions = selectedActivityRange
     ? buildAttendanceDateOptions(
@@ -437,7 +457,7 @@ export default function ValidationPage() {
             ...payload
           })
         : await createAttendanceRecord({
-            actividadId: selectedAttendee?.actividadId ?? "",
+            actividadId: selectedManualActivity?.id ?? "",
             asistenteId: selectedAttendee?.id ?? "",
             metodoRegistro: "manual",
             ...payload
@@ -705,6 +725,22 @@ export default function ValidationPage() {
                   <div className="mt-4 rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
                     Estado operativo del asistente: <span className="font-semibold text-ink">{activityStatus}</span>
                   </div>
+                  {!resolvedQrSession && selectedAttendee && selectedAttendee.activities.length > 0 ? (
+                    <label className="mt-4 block space-y-2 text-sm font-medium text-ink">
+                      <span>Actividad para registrar</span>
+                      <select
+                        value={selectedActivityId ?? ""}
+                        onChange={(event) => setSelectedActivityId(event.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
+                      >
+                        {selectedAttendee.activities.map((activity) => (
+                          <option key={activity.id} value={activity.id}>
+                            {activity.codigo} · {activity.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <label className="mt-4 block space-y-2 text-sm font-medium text-ink">
                     <span>Día de asistencia a firmar</span>
                     <select
