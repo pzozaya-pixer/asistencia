@@ -218,45 +218,36 @@ export default function ReportsPage() {
       </div>
 
       <section className="report-sheet report-page rounded-[40px] border border-slate-200 bg-white p-8 shadow-float">
-        <header className="report-header border-b border-slate-200 pb-6">
+        <header className="report-header border-b border-slate-200 pb-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-700">
                 Informe de asistencia
               </p>
-              <h1 className="mt-3 font-[family:var(--font-heading)] text-3xl font-bold text-slate-950">
+              <h1 className="mt-2 font-[family:var(--font-heading)] text-3xl font-bold text-slate-950">
                 Hoja de firmas por actividad
               </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+              <p className="mt-2 max-w-3xl text-sm leading-5 text-slate-600">
                 Documento para control presencial de asistentes con validación manual de firma y
                 verificación visual.
               </p>
             </div>
-            <div className="rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700">
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               <p><span className="font-semibold text-slate-950">Generado:</span> {new Date().toLocaleString("es-ES")}</p>
               <p className="mt-1"><span className="font-semibold text-slate-950">Operador:</span> {sessionUser?.fullName ?? "No identificado"}</p>
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <InfoBox label="Actividad" value={selectedActivity ? `${selectedActivity.codigo} · ${selectedActivity.nombre}` : "Sin seleccionar"} />
-            <InfoBox label="Ubicación" value={selectedActivity?.ubicacion ?? "Sin definir"} />
-            <InfoBox label="Fechas" value={selectedActivity ? `${formatDate(selectedActivity.fechaInicio)} - ${formatDate(selectedActivity.fechaFin)}` : "-"} />
-            <InfoBox
-              label="Total asistentes"
-              value={
-                isLoading
-                  ? "Cargando..."
-                  : isLoadingAttendees
-                    ? "Actualizando..."
-                    : String(sortedAttendees.length)
-              }
-            />
+          <div className="report-meta-strip mt-4 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <span><span className="font-semibold text-slate-950">Actividad:</span> {selectedActivity ? `${selectedActivity.codigo} · ${selectedActivity.nombre}` : "Sin seleccionar"}</span>
+            <span><span className="font-semibold text-slate-950">Ubicación:</span> {selectedActivity?.ubicacion ?? "Sin definir"}</span>
+            <span><span className="font-semibold text-slate-950">Fechas:</span> {selectedActivity ? `${formatDate(selectedActivity.fechaInicio)} - ${formatDate(selectedActivity.fechaFin)}` : "-"}</span>
+            <span><span className="font-semibold text-slate-950">Total asistentes:</span> {isLoading ? "Cargando..." : isLoadingAttendees ? "Actualizando..." : String(sortedAttendees.length)}</span>
           </div>
         </header>
 
-        <div className="mt-6">
-          <div className="report-table-header hidden grid-cols-[88px_minmax(220px,1.4fr)_160px_150px_70px] gap-4 rounded-[22px] bg-slate-950 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white md:grid">
+        <div className="mt-4">
+          <div className="report-table-header hidden grid-cols-[72px_minmax(220px,1.5fr)_130px_132px_52px] gap-3 rounded-[18px] bg-slate-950 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white md:grid">
             <span>Foto</span>
             <span>Asistente</span>
             <span>Teléfono</span>
@@ -264,7 +255,7 @@ export default function ReportsPage() {
             <span>Asiste</span>
           </div>
 
-          <div className="mt-4 space-y-3">
+          <div className="mt-3 space-y-2">
             {isLoading || isLoadingAttendees ? (
               <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
                 Preparando informe...
@@ -282,15 +273,15 @@ export default function ReportsPage() {
                 key={attendee.attendeeId}
                 className="report-row report-avoid-break rounded-[26px] border border-slate-200 bg-white px-4 py-4"
               >
-                <div className="mb-3 flex items-center justify-between border-b border-dashed border-slate-200 pb-3 md:hidden">
+                <div className="mb-2 flex items-center justify-between border-b border-dashed border-slate-200 pb-2 md:hidden">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700">
                     Registro {index + 1}
                   </p>
                   <p className="text-xs text-slate-500">{attendee.dniNie}</p>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-[88px_minmax(220px,1.4fr)_160px_150px_70px] md:items-center">
-                  <div className="mx-auto flex h-[112px] w-[84px] items-center justify-center overflow-hidden rounded-[18px] border border-slate-300 bg-slate-100">
+                <div className="grid gap-3 md:grid-cols-[72px_minmax(220px,1.5fr)_130px_132px_52px] md:items-center">
+                  <div className="mx-auto flex h-[96px] w-[72px] items-center justify-center overflow-hidden rounded-[14px] border border-slate-300 bg-slate-100">
                     {photoUrls[attendee.attendeeId] ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -308,42 +299,42 @@ export default function ReportsPage() {
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-lg font-semibold text-slate-950">
+                        <p className="text-base font-semibold text-slate-950">
                           {attendee.apellidos}, {attendee.nombre}
                         </p>
-                        <p className="mt-1 text-sm text-slate-500">{attendee.dniNie}</p>
+                        <p className="mt-0.5 text-sm text-slate-500">{attendee.dniNie}</p>
                       </div>
                       <div className="hidden rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 md:inline-flex">
                         #{index + 1}
                       </div>
                     </div>
-                    <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                    <div className="rounded-[16px] border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                       <p><span className="font-semibold text-slate-900">Estado inscripción:</span> {attendee.estado}</p>
-                      <p className="mt-1"><span className="font-semibold text-slate-900">Observaciones:</span> {attendee.observaciones || "Sin observaciones"}</p>
+                      <p className="mt-0.5"><span className="font-semibold text-slate-900">Observaciones:</span> {attendee.observaciones || "Sin observaciones"}</p>
                     </div>
                   </div>
 
-                  <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-4 text-center">
+                  <div className="rounded-[16px] border border-slate-200 bg-slate-50 px-3 py-3 text-center">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                       Teléfono
                     </p>
-                    <p className="mt-3 text-base font-semibold text-slate-950">
+                    <p className="mt-2 text-sm font-semibold text-slate-950">
                       {attendee.telefono || "Sin dato"}
                     </p>
                   </div>
 
-                  <div className="rounded-[18px] border-2 border-slate-300 bg-white p-3">
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  <div className="rounded-[16px] border-2 border-slate-300 bg-white p-2.5">
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                       Firma asistente
                     </p>
-                    <div className="h-[86px] rounded-[12px] border border-dashed border-slate-300 bg-slate-50" />
+                    <div className="h-[72px] rounded-[10px] border border-dashed border-slate-300 bg-slate-50" />
                   </div>
 
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                       Asiste
                     </p>
-                    <div className="h-8 w-8 rounded-[8px] border-2 border-slate-400 bg-white" />
+                    <div className="h-7 w-7 rounded-[6px] border-2 border-slate-400 bg-white" />
                   </div>
                 </div>
               </article>
@@ -352,15 +343,6 @@ export default function ReportsPage() {
         </div>
       </section>
     </main>
-  );
-}
-
-function InfoBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-slate-950">{value}</p>
-    </div>
   );
 }
 

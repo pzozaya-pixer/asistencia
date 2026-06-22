@@ -17,8 +17,14 @@ body {
 }
 
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
   body {
     background: white;
+    font-size: 11px;
   }
 
   .dashboard-shell-header {
@@ -39,6 +45,23 @@ body {
 
   .report-sheet {
     max-width: none !important;
+  }
+
+  .report-header {
+    padding-bottom: 10px !important;
+  }
+
+  .report-meta-strip {
+    gap: 10px !important;
+    line-height: 1.35 !important;
+  }
+
+  .report-row {
+    padding: 10px 12px !important;
+  }
+
+  .report-table-header {
+    margin-top: 8px !important;
   }
 
   .report-avoid-break {
