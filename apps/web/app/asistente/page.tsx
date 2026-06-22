@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
+import { InstallPwaCard } from "@/components/install-pwa-card";
 import {
   createPublicQrSession,
   searchPublicAttendees,
@@ -16,6 +17,24 @@ const steps = [
   "Muestra tu QR al responsable"
 ] as const;
 
+function normalizeLookupQuery(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function isCompleteLookupQuery(value: string) {
+  const normalized = normalizeLookupQuery(value);
+
+  if (/^\d{9}$/.test(normalized)) {
+    return true;
+  }
+
+  if (/^[XYZ]?\d{7,8}[A-Z]$/.test(normalized)) {
+    return true;
+  }
+
+  return false;
+}
+
 export default function PublicAttendeePage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AttendeeLookupResult[]>([]);
@@ -29,12 +48,20 @@ export default function PublicAttendeePage() {
   const [photoObjectUrl, setPhotoObjectUrl] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const deferredQuery = useDeferredValue(query);
+  const normalizedDeferredQuery = useMemo(
+    () => normalizeLookupQuery(deferredQuery),
+    [deferredQuery]
+  );
+  const hasCompleteQuery = useMemo(
+    () => isCompleteLookupQuery(deferredQuery),
+    [deferredQuery]
+  );
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadResults() {
-      const trimmedQuery = deferredQuery.trim();
+      const trimmedQuery = normalizedDeferredQuery;
 
       if (!trimmedQuery) {
         setIsLoading(false);
@@ -44,7 +71,7 @@ export default function PublicAttendeePage() {
         return;
       }
 
-      if (trimmedQuery.length < 5) {
+      if (!hasCompleteQuery) {
         setIsLoading(false);
         setError(null);
         setResults([]);
@@ -262,6 +289,7 @@ export default function PublicAttendeePage() {
                 </div>
               ))}
             </div>
+            <InstallPwaCard />
           </div>
 
           <div className="rounded-[32px] border border-slate-900/10 bg-slate-950 p-5 text-white shadow-panel">
@@ -327,7 +355,7 @@ export default function PublicAttendeePage() {
                 DNI, NIE o teléfono
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Introduce al menos 5 caracteres para encontrar tu ficha y continuar.
+                Solo se mostrará tu ficha cuando el DNI, NIE o teléfono esté completo.
               </p>
             </div>
 
@@ -349,10 +377,10 @@ export default function PublicAttendeePage() {
 
             {!isLoading &&
             !error &&
-            deferredQuery.trim().length > 0 &&
-            deferredQuery.trim().length < 5 ? (
+            normalizedDeferredQuery.length > 0 &&
+            !hasCompleteQuery ? (
               <div className="rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Escribe al menos 5 caracteres para continuar.
+                Completa el DNI, NIE o teléfono para continuar.
               </div>
             ) : null}
 
@@ -391,7 +419,7 @@ export default function PublicAttendeePage() {
                 </button>
               ))}
 
-              {!isLoading && deferredQuery.trim().length >= 5 && results.length === 0 ? (
+              {!isLoading && hasCompleteQuery && results.length === 0 ? (
                 <div className="rounded-[26px] border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
                   No encontramos ninguna coincidencia con esos datos.
                 </div>
