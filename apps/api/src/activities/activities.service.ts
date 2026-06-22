@@ -228,10 +228,10 @@ export class ActivitiesService {
           select
             ra.asistente_id,
             array_agg(
-              distinct to_char(timezone('Europe/Madrid', ra.fecha_hora)::date, 'YYYY-MM-DD')
-              order by to_char(timezone('Europe/Madrid', ra.fecha_hora)::date, 'YYYY-MM-DD')
+              distinct to_char(coalesce(ra.fecha_asistencia, timezone('Europe/Madrid', ra.fecha_hora)::date), 'YYYY-MM-DD')
+              order by to_char(coalesce(ra.fecha_asistencia, timezone('Europe/Madrid', ra.fecha_hora)::date), 'YYYY-MM-DD')
             ) as dias,
-            count(distinct timezone('Europe/Madrid', ra.fecha_hora)::date)::int as total_dias
+            count(distinct coalesce(ra.fecha_asistencia, timezone('Europe/Madrid', ra.fecha_hora)::date))::int as total_dias
           from registros_asistencia ra
           where ra.actividad_id = $1
             and ra.estado = 'validado'
@@ -584,10 +584,10 @@ export class ActivitiesService {
           select
             ra.asistente_id,
             array_agg(
-              distinct to_char(timezone('Europe/Madrid', ra.fecha_hora)::date, 'YYYY-MM-DD')
-              order by to_char(timezone('Europe/Madrid', ra.fecha_hora)::date, 'YYYY-MM-DD')
+              distinct to_char(coalesce(ra.fecha_asistencia, timezone('Europe/Madrid', ra.fecha_hora)::date), 'YYYY-MM-DD')
+              order by to_char(coalesce(ra.fecha_asistencia, timezone('Europe/Madrid', ra.fecha_hora)::date), 'YYYY-MM-DD')
             ) as dias,
-            count(distinct timezone('Europe/Madrid', ra.fecha_hora)::date)::int as total_dias
+            count(distinct coalesce(ra.fecha_asistencia, timezone('Europe/Madrid', ra.fecha_hora)::date))::int as total_dias
           from registros_asistencia ra
           where ra.actividad_id = $1
             and ra.estado = 'validado'

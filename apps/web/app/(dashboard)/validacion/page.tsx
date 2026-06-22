@@ -69,6 +69,7 @@ export default function ValidationPage() {
   const [manualSearchError, setManualSearchError] = useState<string | null>(null);
   const [manualSearchMessage, setManualSearchMessage] = useState<string | null>(null);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [selectedAttendanceDate, setSelectedAttendanceDate] = useState<string>("");
   const [manualDniQuery, setManualDniQuery] = useState("");
   const [manualSearchResults, setManualSearchResults] = useState<AttendeeLookupResult[]>([]);
   const [qrTokenInput, setQrTokenInput] = useState("");
@@ -177,7 +178,11 @@ export default function ValidationPage() {
 
   const allChecklistDone = checklistItems.every((item) => checklistState[item.id]);
   const canSubmitManual = Boolean(selectedAttendee?.actividadId && selectedAttendee?.id);
-  const canSubmit = (resolvedQrSession ? true : canSubmitManual) && allChecklistDone && Boolean(signature);
+  const canSubmit =
+    (resolvedQrSession ? true : canSubmitManual) &&
+    allChecklistDone &&
+    Boolean(signature) &&
+    Boolean(selectedAttendanceDate);
   const displayActivity = resolvedQrSession
     ? `${resolvedQrSession.activity.codigo} · ${resolvedQrSession.activity.nombre}`
     : (selectedAttendee?.actividad ?? "sin asignar");
@@ -223,6 +228,31 @@ export default function ValidationPage() {
       });
     };
   }, [selectedAttendee?.id, selectedAttendee?.photoUrl]);
+
+  const selectedActivityRange = resolvedQrSession
+    ? {
+        fechaInicio: resolvedQrSession.activity.fechaInicio,
+        fechaFin: resolvedQrSession.activity.fechaFin
+      }
+    : selectedAttendee?.activities.find((activity) => activity.id === selectedAttendee.actividadId) ?? null;
+
+  const attendanceDateOptions = selectedActivityRange
+    ? buildAttendanceDateOptions(
+        selectedActivityRange.fechaInicio ?? "",
+        selectedActivityRange.fechaFin ?? ""
+      )
+    : [];
+
+  useEffect(() => {
+    if (attendanceDateOptions.length === 0) {
+      setSelectedAttendanceDate("");
+      return;
+    }
+
+    setSelectedAttendanceDate((current) =>
+      current && attendanceDateOptions.includes(current) ? current : attendanceDateOptions[0]
+    );
+  }, [selectedAttendee?.id, resolvedQrSession?.sessionId, attendanceDateOptions.join("|")]);
 
   function resetVisualValidation() {
     setChecklistState(initialChecklistState);
@@ -393,6 +423,7 @@ export default function ValidationPage() {
 
     try {
       const payload = {
+        attendanceDate: selectedAttendanceDate,
         observaciones: resolvedQrSession
           ? "Validación por escaneo QR con firma capturada desde panel responsable."
           : `Registro manual por DNI/NIE ${selectedAttendee?.dniNie ?? ""} con firma capturada desde panel responsable.`,
@@ -416,7 +447,7 @@ export default function ValidationPage() {
         setValidationMessage(
           `${
             resolvedQrSession ? "Acceso QR confirmado" : "Validación registrada"
-          } a las ${new Date(record.fechaHora).toLocaleTimeString("es-ES", {
+          } para el día ${record.attendanceDate} a las ${new Date(record.fechaHora).toLocaleTimeString("es-ES", {
             hour: "2-digit",
             minute: "2-digit"
           })} con firma asociada.`
@@ -674,6 +705,20 @@ export default function ValidationPage() {
                   <div className="mt-4 rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
                     Estado operativo del asistente: <span className="font-semibold text-ink">{activityStatus}</span>
                   </div>
+                  <label className="mt-4 block space-y-2 text-sm font-medium text-ink">
+                    <span>Día de asistencia a firmar</span>
+                    <select
+                      value={selectedAttendanceDate}
+                      onChange={(event) => setSelectedAttendanceDate(event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-signal"
+                    >
+                      {attendanceDateOptions.map((date) => (
+                        <option key={date} value={date}>
+                          {formatAttendanceDate(date)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-[0.8fr_1.2fr]">
@@ -776,8 +821,8 @@ export default function ValidationPage() {
             >
               {validationMessage ??
                 (resolvedQrSession
-                  ? "QR listo. Completa checklist y firma para confirmar el acceso final."
-                  : "La validación manual queda pendiente hasta completar checklist y firma.")}
+                  ? "QR listo. Selecciona el día, completa checklist y firma para confirmar el acceso final."
+                  : "La validación manual queda pendiente hasta seleccionar día, completar checklist y firma.")}
             </div>
 
             <button
@@ -797,4 +842,31 @@ export default function ValidationPage() {
       </SectionCard>
     </main>
   );
+}
+
+function buildAttendanceDateOptions(start: string, end: string) {
+  if (!start || !end) {
+    return [];
+  }
+
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const output: string[] = [];
+
+  startDate.setHours(12, 0, 0, 0);
+  endDate.setHours(12, 0, 0, 0);
+
+  for (const cursor = new Date(startDate); cursor <= endDate; cursor.setDate(cursor.getDate() + 1)) {
+    output.push(cursor.toISOString().slice(0, 10));
+  }
+
+  return output;
+}
+
+function formatAttendanceDate(value: string) {
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(new Date(`${value}T12:00:00`));
 }

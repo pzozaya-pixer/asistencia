@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
 import { AuthenticatedUser } from '../auth/token.service';
@@ -16,6 +20,7 @@ type AttendanceRow = {
   firmaId: string | null;
   estado: string;
   metodoRegistro: string;
+  attendanceDate: string;
   fechaHora: string;
   observaciones: string | null;
 };
@@ -33,21 +38,27 @@ export class AttendanceService {
     this.ensureVisualValidation(payload.validacionVisual);
     const responsableId = await this.usersService.findResponsableIdByUserId(user.id);
     return this.database.withTransaction(async (client) => {
-      const firmaId = await this.createInlineSignature(client, payload.firma);
-      const status = await this.resolveDailyStatus(
+      const attendanceDate = await this.resolveAttendanceDate(
+        client,
+        payload.actividadId,
+        payload.attendanceDate,
+      );
+      await this.ensureNoDailyDuplicate(
         client,
         payload.actividadId,
         payload.asistenteId,
+        attendanceDate,
       );
+      const firmaId = await this.createInlineSignature(client, payload.firma);
       const hash = createHash('sha256')
         .update(
           [
             payload.actividadId,
             payload.asistenteId,
             payload.metodoRegistro,
+            attendanceDate,
             payload.observaciones ?? '',
             firmaId,
-            status,
             Date.now().toString(),
           ].join(':'),
         )
@@ -57,17 +68,18 @@ export class AttendanceService {
         `
           insert into registros_asistencia (
             id, actividad_id, asistente_id, responsable_id, firma_id, metodo_registro,
-            estado, observaciones, hash_validacion
+            fecha_asistencia, estado, observaciones, hash_validacion
           )
           values (
             $1, $2, $3, $4, $5, $6,
-            $7, $8, $9
+            $7, 'validado', $8, $9
           )
           returning
             id,
             actividad_id as "actividadId",
             asistente_id as "asistenteId",
             firma_id as "firmaId",
+            fecha_asistencia as "attendanceDate",
             estado,
             metodo_registro as "metodoRegistro",
             fecha_hora as "fechaHora",
@@ -80,9 +92,8 @@ export class AttendanceService {
           responsableId ?? null,
           firmaId,
           payload.metodoRegistro,
-          status,
-          payload.observaciones ??
-            (status === 'duplicado' ? 'Intento duplicado en el mismo día.' : null),
+          attendanceDate,
+          payload.observaciones ?? 'Registro manual validado.',
           hash,
         ],
       );
@@ -99,6 +110,7 @@ export class AttendanceService {
           actividad_id as "actividadId",
           asistente_id as "asistenteId",
           firma_id as "firmaId",
+          fecha_asistencia as "attendanceDate",
           estado,
           metodo_registro as "metodoRegistro",
           fecha_hora as "fechaHora",
@@ -117,22 +129,28 @@ export class AttendanceService {
     const session = await this.qrSessionsService.consume(payload.token);
 
     return this.database.withTransaction(async (client) => {
-      const firmaId = await this.createInlineSignature(client, payload.firma);
-      const status = await this.resolveDailyStatus(
+      const attendanceDate = await this.resolveAttendanceDate(
+        client,
+        session.activityId,
+        payload.attendanceDate,
+      );
+      await this.ensureNoDailyDuplicate(
         client,
         session.activityId,
         session.attendeeId,
+        attendanceDate,
       );
+      const firmaId = await this.createInlineSignature(client, payload.firma);
       const hash = createHash('sha256')
         .update(
           [
             session.activityId,
             session.attendeeId,
             'qr',
+            attendanceDate,
             payload.observaciones ?? '',
             session.sessionId,
             firmaId,
-            status,
             Date.now().toString(),
           ].join(':'),
         )
@@ -142,17 +160,18 @@ export class AttendanceService {
         `
           insert into registros_asistencia (
             id, actividad_id, asistente_id, responsable_id, firma_id, metodo_registro,
-            estado, observaciones, hash_validacion, qr_session_id
+            fecha_asistencia, estado, observaciones, hash_validacion, qr_session_id
           )
           values (
             $1, $2, $3, $4, $5, 'qr',
-            $6, $7, $8, $9
+            $6, 'validado', $7, $8, $9
           )
           returning
             id,
             actividad_id as "actividadId",
             asistente_id as "asistenteId",
             firma_id as "firmaId",
+            fecha_asistencia as "attendanceDate",
             estado,
             metodo_registro as "metodoRegistro",
             fecha_hora as "fechaHora",
@@ -164,11 +183,9 @@ export class AttendanceService {
           session.attendeeId,
           responsableId ?? null,
           firmaId,
-          status,
+          attendanceDate,
           payload.observaciones ??
-            (status === 'duplicado'
-              ? 'Intento duplicado en el mismo día por QR.'
-              : 'Validación por escaneo QR desde panel responsable.'),
+            'Validación por escaneo QR desde panel responsable.',
           hash,
           session.sessionId,
         ],
@@ -196,10 +213,41 @@ export class AttendanceService {
     }
   }
 
-  private async resolveDailyStatus(
+  private async resolveAttendanceDate(
+    client: PoolClient,
+    activityId: string,
+    inputDate: string,
+  ) {
+    const normalizedDate = inputDate.slice(0, 10);
+    const activityResult = await client.query<{
+      exists: boolean;
+    }>(
+      `
+        select exists(
+          select 1
+          from actividades
+          where id = $1
+            and deleted_at is null
+            and $2::date between fecha_inicio::date and fecha_fin::date
+        ) as exists
+      `,
+      [activityId, normalizedDate],
+    );
+
+    if (!activityResult.rows[0]?.exists) {
+      throw new BadRequestException(
+        'La fecha de firma debe estar dentro del rango del evento.',
+      );
+    }
+
+    return normalizedDate;
+  }
+
+  private async ensureNoDailyDuplicate(
     client: PoolClient,
     activityId: string,
     attendeeId: string,
+    attendanceDate: string,
   ) {
     const duplicateCheck = await client.query<{ exists: boolean }>(
       `
@@ -209,13 +257,17 @@ export class AttendanceService {
           where actividad_id = $1
             and asistente_id = $2
             and estado = 'validado'
-            and timezone('Europe/Madrid', fecha_hora)::date = timezone('Europe/Madrid', now())::date
+            and fecha_asistencia = $3::date
         ) as exists
       `,
-      [activityId, attendeeId],
+      [activityId, attendeeId, attendanceDate],
     );
 
-    return duplicateCheck.rows[0]?.exists ? 'duplicado' : 'validado';
+    if (duplicateCheck.rows[0]?.exists) {
+      throw new ConflictException(
+        'Este asistente ya firmó la asistencia para ese día.',
+      );
+    }
   }
 
   private async createInlineSignature(

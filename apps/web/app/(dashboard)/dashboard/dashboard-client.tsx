@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 
 import {
   downloadDashboardExport,
+  fetchActivities,
   fetchDashboardSummary,
   getStoredUser,
+  type ActivityRecord,
   type SessionUser,
   type DashboardSummary
 } from "@/lib/auth";
@@ -19,6 +21,9 @@ import { StatusBadge } from "@/components/status-badge";
 export function DashboardClient() {
   const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [activities, setActivities] = useState<ActivityRecord[]>([]);
+  const [exportActivityId, setExportActivityId] = useState("");
+  const [exportAttendanceDate, setExportAttendanceDate] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState<null | "excel" | "pdf">(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,10 +40,15 @@ export function DashboardClient() {
       setError(null);
 
       try {
-        const nextSummary = await fetchDashboardSummary();
+        const [nextSummary, nextActivities] = await Promise.all([
+          fetchDashboardSummary(),
+          fetchActivities()
+        ]);
 
         if (!cancelled) {
           setSummary(nextSummary);
+          setActivities(nextActivities);
+          setExportActivityId(nextSummary.activeActivity?.id ?? nextActivities[0]?.id ?? "");
         }
       } catch (loadError) {
         if (!cancelled) {
@@ -62,17 +72,42 @@ export function DashboardClient() {
     };
   }, []);
 
+  const selectedExportActivity =
+    activities.find((activity) => activity.id === exportActivityId) ?? null;
+  const exportDateOptions = selectedExportActivity
+    ? buildAttendanceDateOptions(
+        selectedExportActivity.fechaInicio,
+        selectedExportActivity.fechaFin
+      )
+    : [];
+
+  useEffect(() => {
+    if (exportDateOptions.length === 0) {
+      setExportAttendanceDate("");
+      return;
+    }
+
+    setExportAttendanceDate((current) =>
+      current && exportDateOptions.includes(current)
+        ? current
+        : resolvePreferredExportDate(exportDateOptions)
+    );
+  }, [exportDateOptions.join("|")]);
+
   async function handleExport(format: "excel" | "pdf") {
     setIsExporting(format);
     setError(null);
 
     try {
-      const blob = await downloadDashboardExport(format);
+      const blob = await downloadDashboardExport(format, {
+        activityId: exportActivityId || undefined,
+        attendanceDate: exportAttendanceDate || undefined
+      });
       const extension = format === "excel" ? "xlsx" : "pdf";
       const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = objectUrl;
-      anchor.download = `actividad-activa-asistencia.${extension}`;
+      anchor.download = `${selectedExportActivity?.codigo ?? "actividad"}-${exportAttendanceDate || "sin-fecha"}-asistencia.${extension}`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -101,10 +136,33 @@ export function DashboardClient() {
             </h1>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <select
+              value={exportActivityId}
+              onChange={(event) => setExportActivityId(event.target.value)}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-ink outline-none transition hover:border-signal"
+            >
+              {activities.map((activity) => (
+                <option key={activity.id} value={activity.id}>
+                  {activity.codigo} · {activity.nombre}
+                </option>
+              ))}
+            </select>
+            <select
+              value={exportAttendanceDate}
+              onChange={(event) => setExportAttendanceDate(event.target.value)}
+              disabled={exportDateOptions.length === 0}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-ink outline-none transition hover:border-signal disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {exportDateOptions.map((date) => (
+                <option key={date} value={date}>
+                  {formatAttendanceDate(date)}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
               onClick={() => void handleExport("excel")}
-              disabled={!summary?.activeActivity || isExporting !== null}
+              disabled={!exportActivityId || !exportAttendanceDate || isExporting !== null}
               className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isExporting === "excel" ? "Generando Excel..." : "Exportar Excel"}
@@ -112,7 +170,7 @@ export function DashboardClient() {
             <button
               type="button"
               onClick={() => void handleExport("pdf")}
-              disabled={!summary?.activeActivity || isExporting !== null}
+              disabled={!exportActivityId || !exportAttendanceDate || isExporting !== null}
               className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-coral hover:text-coral disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isExporting === "pdf" ? "Generando PDF..." : "Exportar PDF"}
@@ -198,27 +256,27 @@ export function DashboardClient() {
             <button
               type="button"
               onClick={() => void handleExport("excel")}
-              disabled={!summary?.activeActivity || isExporting !== null}
+              disabled={!exportActivityId || !exportAttendanceDate || isExporting !== null}
               className="rounded-[30px] border border-cyan-200 bg-cyan-50/80 p-5 text-left transition hover:-translate-y-1 hover:shadow-panel disabled:cursor-not-allowed disabled:opacity-70"
             >
               <p className="mb-2 font-[family:var(--font-heading)] text-2xl font-bold text-ink">
                 Excel
               </p>
               <p className="text-sm leading-6 text-slate-600">
-                Descarga la relación de asistentes y estado de acceso de la actividad activa.
+                Descarga el registro diario del evento y una hoja de fichas con evidencias.
               </p>
             </button>
             <button
               type="button"
               onClick={() => void handleExport("pdf")}
-              disabled={!summary?.activeActivity || isExporting !== null}
+              disabled={!exportActivityId || !exportAttendanceDate || isExporting !== null}
               className="rounded-[30px] border border-rose-200 bg-rose-50/80 p-5 text-left transition hover:-translate-y-1 hover:shadow-panel disabled:cursor-not-allowed disabled:opacity-70"
             >
               <p className="mb-2 font-[family:var(--font-heading)] text-2xl font-bold text-ink">
                 PDF
               </p>
               <p className="text-sm leading-6 text-slate-600">
-                Genera un resumen imprimible con la actividad activa y el detalle de asistencia.
+                Genera el acta diaria imprimible del evento y la fecha seleccionados.
               </p>
             </button>
           </div>
@@ -310,4 +368,34 @@ export function DashboardClient() {
       </section>
     </main>
   );
+}
+
+function buildAttendanceDateOptions(start: string, end: string) {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const output: string[] = [];
+
+  startDate.setHours(12, 0, 0, 0);
+  endDate.setHours(12, 0, 0, 0);
+
+  for (const cursor = new Date(startDate); cursor <= endDate; cursor.setDate(cursor.getDate() + 1)) {
+    output.push(cursor.toISOString().slice(0, 10));
+  }
+
+  return output;
+}
+
+function resolvePreferredExportDate(options: string[]) {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const todayValue = today.toISOString().slice(0, 10);
+  return options.includes(todayValue) ? todayValue : options[0] ?? "";
+}
+
+function formatAttendanceDate(value: string) {
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(new Date(`${value}T12:00:00`));
 }

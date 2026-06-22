@@ -23,6 +23,8 @@ type AttendeeRow = {
     nombre: string;
     estado: string;
     estadoInscripcion: string | null;
+    fechaInicio: string;
+    fechaFin: string;
   }>;
 };
 
@@ -53,7 +55,9 @@ export class AttendeesService {
                 'codigo', act.codigo,
                 'nombre', act.nombre,
                 'estado', act.estado,
-                'estadoInscripcion', aa.estado
+                'estadoInscripcion', aa.estado,
+                'fechaInicio', act.fecha_inicio,
+                'fechaFin', act.fecha_fin
               )
             ) filter (where act.id is not null),
             '[]'::json

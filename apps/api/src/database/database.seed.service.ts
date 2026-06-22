@@ -96,6 +96,28 @@ export class DatabaseSeedService implements OnModuleInit {
       alter table if exists firmas
       add column if not exists data_url text
     `);
+
+    await this.database.query(`
+      alter table if exists registros_asistencia
+      add column if not exists fecha_asistencia date
+    `);
+
+    await this.database.query(`
+      update registros_asistencia
+      set fecha_asistencia = timezone('Europe/Madrid', fecha_hora)::date
+      where fecha_asistencia is null
+    `);
+
+    await this.database.query(`
+      create index if not exists idx_registros_asistencia_fecha_asistencia
+      on registros_asistencia(fecha_asistencia desc)
+    `);
+
+    await this.database.query(`
+      create unique index if not exists idx_registros_asistencia_unique_daily_validated
+      on registros_asistencia(actividad_id, asistente_id, fecha_asistencia)
+      where estado = 'validado'
+    `);
   }
 
   private async ensureDemoData() {

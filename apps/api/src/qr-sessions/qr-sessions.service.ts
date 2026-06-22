@@ -23,6 +23,8 @@ type QrSessionLookupRow = {
   activityId: string;
   activityCode: string;
   activityName: string;
+  activityStart: string;
+  activityEnd: string;
   attendeeName: string;
   attendeeLastName: string;
   attendeeDocument: string;
@@ -140,6 +142,8 @@ export class QrSessionsService {
         id: session.activityId,
         codigo: session.activityCode,
         nombre: session.activityName,
+        fechaInicio: session.activityStart,
+        fechaFin: session.activityEnd,
       },
       expiresAt: session.expiresAt,
       status: 'ready' as const,
@@ -207,6 +211,8 @@ export class QrSessionsService {
           sq.expira_at as "expiresAt",
           act.codigo as "activityCode",
           act.nombre as "activityName",
+          act.fecha_inicio as "activityStart",
+          act.fecha_fin as "activityEnd",
           a.nombre as "attendeeName",
           a.apellidos as "attendeeLastName",
           a.dni_nie as "attendeeDocument"

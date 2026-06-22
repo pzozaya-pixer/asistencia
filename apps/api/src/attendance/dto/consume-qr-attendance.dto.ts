@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsDateString,
   IsInt,
   IsOptional,
   IsString,
@@ -29,6 +30,9 @@ export class ConsumeQrAttendanceDto {
   @IsString()
   @MinLength(20)
   token!: string;
+
+  @IsDateString()
+  attendanceDate!: string;
 
   @IsOptional()
   @IsString()

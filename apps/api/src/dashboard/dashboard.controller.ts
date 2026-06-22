@@ -1,4 +1,4 @@
-import { Controller, Get, Res } from '@nestjs/common';
+import { Controller, Get, Query, Res } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { DashboardService } from './dashboard.service';
@@ -15,8 +15,15 @@ export class DashboardController {
 
   @Get('export/excel')
   @Roles(Role.SuperAdmin, Role.Responsable, Role.OperadorLectura)
-  async exportExcel(@Res() response: any) {
-    const file = await this.dashboardService.exportActiveActivityExcel();
+  async exportExcel(
+    @Query('activityId') activityId: string | undefined,
+    @Query('attendanceDate') attendanceDate: string | undefined,
+    @Res() response: any,
+  ) {
+    const file = await this.dashboardService.exportActiveActivityExcel(
+      activityId,
+      attendanceDate,
+    );
     response.setHeader('Content-Type', file.contentType);
     response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
     response.send(file.buffer);
@@ -24,8 +31,15 @@ export class DashboardController {
 
   @Get('export/pdf')
   @Roles(Role.SuperAdmin, Role.Responsable, Role.OperadorLectura)
-  async exportPdf(@Res() response: any) {
-    const file = await this.dashboardService.exportActiveActivityPdf();
+  async exportPdf(
+    @Query('activityId') activityId: string | undefined,
+    @Query('attendanceDate') attendanceDate: string | undefined,
+    @Res() response: any,
+  ) {
+    const file = await this.dashboardService.exportActiveActivityPdf(
+      activityId,
+      attendanceDate,
+    );
     response.setHeader('Content-Type', file.contentType);
     response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
     response.send(file.buffer);

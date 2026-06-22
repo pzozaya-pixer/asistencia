@@ -35,6 +35,8 @@ export type AttendeeLookupResult = {
     nombre: string;
     estado: string;
     estadoInscripcion?: string | null;
+    fechaInicio?: string;
+    fechaFin?: string;
   }>;
 };
 
@@ -63,6 +65,8 @@ export type ResolvedQrSession = {
     id: string;
     codigo: string;
     nombre: string;
+    fechaInicio: string;
+    fechaFin: string;
   };
   expiresAt: string;
   status: "ready";
@@ -141,6 +145,7 @@ export type ActivityAttendeeRecord = {
   observaciones?: string | null;
   attendanceStatus?: string | null;
   metodoRegistro?: string | null;
+  attendanceDate?: string | null;
   fechaHora?: string | null;
   attendanceDays: string[];
   attendanceDaysCount: number;
@@ -236,6 +241,7 @@ export async function createAttendanceRecord(payload: {
   actividadId: string;
   asistenteId: string;
   metodoRegistro: "qr" | "manual";
+  attendanceDate: string;
   observaciones?: string;
   validacionVisual: boolean;
   firma: {
@@ -271,6 +277,7 @@ export async function createAttendanceRecord(payload: {
     asistenteId: string;
     estado: string;
     metodoRegistro: string;
+    attendanceDate: string;
     fechaHora: string;
     observaciones?: string | null;
   };
@@ -293,14 +300,30 @@ export async function fetchDashboardSummary() {
   return (await response.json()) as DashboardSummary;
 }
 
-export async function downloadDashboardExport(format: "excel" | "pdf") {
+export async function downloadDashboardExport(
+  format: "excel" | "pdf",
+  options?: {
+    activityId?: string;
+    attendanceDate?: string;
+  }
+) {
   const token = getStoredAccessToken();
 
   if (!token) {
     throw new Error("La sesión ha caducado.");
   }
 
-  const response = await fetch(`/api/dashboard/export/${format}`, {
+  const url = new URL(`/api/dashboard/export/${format}`, window.location.origin);
+
+  if (options?.activityId) {
+    url.searchParams.set("activityId", options.activityId);
+  }
+
+  if (options?.attendanceDate) {
+    url.searchParams.set("attendanceDate", options.attendanceDate);
+  }
+
+  const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`
     },
@@ -756,6 +779,7 @@ export async function resolveQrSession(tokenValue: string) {
 
 export async function consumeQrAttendance(payload: {
   token: string;
+  attendanceDate: string;
   observaciones?: string;
   validacionVisual: boolean;
   firma: {
@@ -791,6 +815,7 @@ export async function consumeQrAttendance(payload: {
     asistenteId: string;
     estado: string;
     metodoRegistro: string;
+    attendanceDate: string;
     fechaHora: string;
     observaciones?: string | null;
   };

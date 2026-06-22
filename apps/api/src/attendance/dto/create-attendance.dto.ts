@@ -1,6 +1,7 @@
 import { Type } from "class-transformer";
 import {
   IsBoolean,
+  IsDateString,
   IsIn,
   IsInt,
   IsOptional,
@@ -35,6 +36,9 @@ export class CreateAttendanceDto {
 
   @IsIn(["qr", "manual"])
   metodoRegistro!: "qr" | "manual";
+
+  @IsDateString()
+  attendanceDate!: string;
 
   @IsOptional()
   @IsString()
