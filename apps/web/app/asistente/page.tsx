@@ -17,7 +17,7 @@ const steps = [
   "Muestra tu QR al responsable"
 ] as const;
 
-export default function AttendeePage() {
+export default function PublicAttendeePage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AttendeeLookupResult[]>([]);
   const [selectedAttendeeId, setSelectedAttendeeId] = useState<string | null>(null);
@@ -237,7 +237,7 @@ export default function AttendeePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-5xl flex-col gap-6">
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-5 sm:px-6 sm:py-6">
       <section className="overflow-hidden rounded-[36px] border border-cyan-100 bg-[radial-gradient(circle_at_top_left,_rgba(82,174,204,0.24),_transparent_38%),linear-gradient(135deg,#f7fbff_0%,#eef8ff_42%,#fffaf2_100%)] p-5 shadow-panel sm:p-7">
         <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-5">
