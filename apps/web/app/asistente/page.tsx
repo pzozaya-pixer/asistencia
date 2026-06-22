@@ -36,6 +36,15 @@ function isCompleteLookupQuery(value: string) {
   return false;
 }
 
+function loadImage(sourceUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("No se pudo cargar la imagen seleccionada."));
+    image.src = sourceUrl;
+  });
+}
+
 export default function PublicAttendeePage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AttendeeLookupResult[]>([]);
@@ -49,6 +58,11 @@ export default function PublicAttendeePage() {
   const [photoObjectUrl, setPhotoObjectUrl] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [pendingPhotoUrl, setPendingPhotoUrl] = useState<string | null>(null);
+  const [pendingPhotoName, setPendingPhotoName] = useState<string | null>(null);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropOffsetX, setCropOffsetX] = useState(0);
+  const [cropOffsetY, setCropOffsetY] = useState(0);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const deferredQuery = useDeferredValue(query);
@@ -234,6 +248,14 @@ export default function PublicAttendeePage() {
     };
   }, [selectedAttendee?.id, selectedAttendee?.photoUrl]);
 
+  useEffect(() => {
+    return () => {
+      if (pendingPhotoUrl) {
+        URL.revokeObjectURL(pendingPhotoUrl);
+      }
+    };
+  }, [pendingPhotoUrl]);
+
   async function handleGenerateQr() {
     if (!selectedAttendee || !selectedActivity) {
       setError("Selecciona tu actividad antes de generar el código.");
@@ -268,8 +290,92 @@ export default function PublicAttendeePage() {
     }
   }
 
+  function resetPendingPhoto() {
+    setPendingPhotoUrl((current) => {
+      if (current) {
+        URL.revokeObjectURL(current);
+      }
+
+      return null;
+    });
+    setPendingPhotoName(null);
+    setCropZoom(1);
+    setCropOffsetX(0);
+    setCropOffsetY(0);
+
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = "";
+    }
+
+    if (galleryInputRef.current) {
+      galleryInputRef.current.value = "";
+    }
+  }
+
   async function handlePhotoSelected(file: File | null) {
     if (!file || !selectedAttendee) {
+      return;
+    }
+
+    setError(null);
+    resetPendingPhoto();
+    setPendingPhotoUrl(URL.createObjectURL(file));
+    setPendingPhotoName(file.name || "foto-carnet.jpg");
+  }
+
+  async function buildCroppedPhotoFile() {
+    if (!pendingPhotoUrl) {
+      throw new Error("Selecciona una fotografía antes de continuar.");
+    }
+
+    const image = await loadImage(pendingPhotoUrl);
+    const canvas = document.createElement("canvas");
+    const outputWidth = 720;
+    const outputHeight = 960;
+    const frameRatio = outputWidth / outputHeight;
+    const imageRatio = image.width / image.height;
+
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("No se pudo preparar la imagen para subirla.");
+    }
+
+    const baseScale =
+      imageRatio > frameRatio
+        ? outputHeight / image.height
+        : outputWidth / image.width;
+    const drawWidth = image.width * baseScale * cropZoom;
+    const drawHeight = image.height * baseScale * cropZoom;
+    const maxOffsetX = Math.max(0, (drawWidth - outputWidth) / 2);
+    const maxOffsetY = Math.max(0, (drawHeight - outputHeight) / 2);
+    const translateX = -maxOffsetX * cropOffsetX;
+    const translateY = -maxOffsetY * cropOffsetY;
+    const drawX = (outputWidth - drawWidth) / 2 + translateX;
+    const drawY = (outputHeight - drawHeight) / 2 + translateY;
+
+    context.fillStyle = "#f8fbfe";
+    context.fillRect(0, 0, outputWidth, outputHeight);
+    context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.92)
+    );
+
+    if (!blob) {
+      throw new Error("No se pudo convertir la imagen recortada.");
+    }
+
+    return new File([blob], pendingPhotoName ?? "foto-carnet.jpg", {
+      type: "image/jpeg"
+    });
+  }
+
+  async function handleUploadCroppedPhoto() {
+    if (!selectedAttendee) {
       return;
     }
 
@@ -277,7 +383,8 @@ export default function PublicAttendeePage() {
     setError(null);
 
     try {
-      const uploaded = await uploadPublicAttendeePhoto(selectedAttendee.id, file);
+      const croppedFile = await buildCroppedPhotoFile();
+      const uploaded = await uploadPublicAttendeePhoto(selectedAttendee.id, croppedFile);
 
       setResults((current) =>
         current.map((attendee) =>
@@ -291,6 +398,7 @@ export default function PublicAttendeePage() {
         )
       );
       setPhotoObjectUrl(uploaded.photoUrl);
+      resetPendingPhoto();
     } catch (uploadError) {
       setError(
         uploadError instanceof Error
@@ -299,14 +407,6 @@ export default function PublicAttendeePage() {
       );
     } finally {
       setIsUploadingPhoto(false);
-
-      if (cameraInputRef.current) {
-        cameraInputRef.current.value = "";
-      }
-
-      if (galleryInputRef.current) {
-        galleryInputRef.current.value = "";
-      }
     }
   }
 
@@ -615,10 +715,103 @@ export default function PublicAttendeePage() {
                 </div>
               ) : null}
 
+              {pendingPhotoUrl ? (
+                <div className="space-y-4 rounded-[24px] border border-cyan-200 bg-cyan-50 px-4 py-4">
+                  <div>
+                    <p className="font-semibold text-slate-950">Ajusta la foto carnet</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-700">
+                      Centra el rostro dentro del marco antes de guardar la imagen.
+                    </p>
+                  </div>
+
+                  <div className="mx-auto flex w-full max-w-[280px] justify-center">
+                    <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[28px] border-4 border-white bg-slate-200 shadow-sm">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={pendingPhotoUrl}
+                        alt="Previsualización para recorte"
+                        className="absolute left-1/2 top-1/2 max-w-none select-none"
+                        style={{
+                          width: `${100 * cropZoom}%`,
+                          minWidth: "100%",
+                          minHeight: "100%",
+                          transform: `translate(calc(-50% + ${cropOffsetX * 36}px), calc(-50% + ${cropOffsetY * 52}px))`
+                        }}
+                      />
+                      <div className="pointer-events-none absolute inset-0 border-[10px] border-white/45" />
+                    </div>
+                  </div>
+
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium text-slate-800">Zoom</span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="2.4"
+                      step="0.05"
+                      value={cropZoom}
+                      onChange={(event) => setCropZoom(Number(event.target.value))}
+                      className="w-full"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium text-slate-800">Mover izquierda/derecha</span>
+                    <input
+                      type="range"
+                      min="-1"
+                      max="1"
+                      step="0.01"
+                      value={cropOffsetX}
+                      onChange={(event) => setCropOffsetX(Number(event.target.value))}
+                      className="w-full"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium text-slate-800">Mover arriba/abajo</span>
+                    <input
+                      type="range"
+                      min="-1"
+                      max="1"
+                      step="0.01"
+                      value={cropOffsetY}
+                      onChange={(event) => setCropOffsetY(Number(event.target.value))}
+                      className="w-full"
+                    />
+                  </label>
+
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => void handleUploadCroppedPhoto()}
+                      disabled={isUploadingPhoto}
+                      className="rounded-full bg-slate-950 px-5 py-3 font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {isUploadingPhoto ? "Guardando foto..." : "Guardar foto carnet"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetPendingPhoto}
+                      disabled={isUploadingPhoto}
+                      className="rounded-full border border-slate-300 bg-white px-5 py-3 font-semibold text-slate-900 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               <button
                 type="button"
                 onClick={handleGenerateQr}
-                disabled={isGenerating || isUploadingPhoto || !selectedActivity || !selectedAttendee.hasPhoto}
+                disabled={
+                  isGenerating ||
+                  isUploadingPhoto ||
+                  !selectedActivity ||
+                  !selectedAttendee.hasPhoto ||
+                  Boolean(pendingPhotoUrl)
+                }
                 className="w-full rounded-full bg-slate-950 px-5 py-4 text-base font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isGenerating ? "Generando tu código..." : "Generar mi QR de acceso"}
