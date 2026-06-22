@@ -109,6 +109,18 @@ export class DatabaseSeedService implements OnModuleInit {
     `);
 
     await this.database.query(`
+      delete from registros_asistencia ra
+      using registros_asistencia duplicate
+      where ra.id < duplicate.id
+        and ra.actividad_id = duplicate.actividad_id
+        and ra.asistente_id = duplicate.asistente_id
+        and coalesce(ra.fecha_asistencia, timezone('Europe/Madrid', ra.fecha_hora)::date) =
+            coalesce(duplicate.fecha_asistencia, timezone('Europe/Madrid', duplicate.fecha_hora)::date)
+        and ra.estado = 'validado'
+        and duplicate.estado = 'validado'
+    `);
+
+    await this.database.query(`
       create index if not exists idx_registros_asistencia_fecha_asistencia
       on registros_asistencia(fecha_asistencia desc)
     `);
