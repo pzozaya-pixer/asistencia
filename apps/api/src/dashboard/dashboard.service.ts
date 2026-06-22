@@ -431,18 +431,17 @@ export class DashboardService {
   }
 
   private resolveExportDate(activity: ActiveActivityRow, attendanceDate?: string) {
+    const activityStart = this.toDateOnlyValue(activity.fechaInicio);
+    const activityEnd = this.toDateOnlyValue(activity.fechaFin);
     const normalized =
       attendanceDate?.slice(0, 10) ??
-      this.resolveDefaultActivityDate(activity.fechaInicio, activity.fechaFin);
+      this.resolveDefaultActivityDate(activityStart, activityEnd);
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
       throw new BadRequestException('attendanceDate debe usar formato YYYY-MM-DD.');
     }
 
-    if (
-      normalized < activity.fechaInicio.slice(0, 10) ||
-      normalized > activity.fechaFin.slice(0, 10)
-    ) {
+    if (normalized < activityStart || normalized > activityEnd) {
       throw new BadRequestException(
         'La fecha exportada debe estar dentro del rango del evento.',
       );
@@ -464,6 +463,14 @@ export class DashboardService {
     }
 
     return start.slice(0, 10);
+  }
+
+  private toDateOnlyValue(value: string | Date) {
+    if (value instanceof Date) {
+      return value.toISOString().slice(0, 10);
+    }
+
+    return value.slice(0, 10);
   }
 
   private async getActiveActivity() {
