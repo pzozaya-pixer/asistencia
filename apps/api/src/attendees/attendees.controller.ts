@@ -1,7 +1,9 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -15,6 +17,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { SearchAttendeeDto } from './dto/search-attendee.dto';
+import { UpsertAttendeeDto } from './dto/upsert-attendee.dto';
 import { AttendeesService } from './attendees.service';
 
 type RequestWithUser = {
@@ -35,6 +38,18 @@ export class AttendeesController {
   @Roles(Role.SuperAdmin, Role.Responsable, Role.OperadorLectura)
   findAll(@Query() query: SearchAttendeeDto) {
     return this.attendeesService.findAll(query.q);
+  }
+
+  @Post()
+  @Roles(Role.SuperAdmin, Role.Responsable)
+  create(@Body() payload: UpsertAttendeeDto) {
+    return this.attendeesService.create(payload);
+  }
+
+  @Patch(':id')
+  @Roles(Role.SuperAdmin, Role.Responsable)
+  update(@Param('id') id: string, @Body() payload: UpsertAttendeeDto) {
+    return this.attendeesService.update(id, payload);
   }
 
   @Public()

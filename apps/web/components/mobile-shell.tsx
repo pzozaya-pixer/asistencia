@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", roles: ["super_admin", "responsable", "operador_lectura"] },
   { href: "/eventos", label: "Eventos", roles: ["super_admin", "responsable"] },
+  { href: "/asistentes", label: "Asistentes", roles: ["super_admin", "responsable"] },
   { href: "/usuarios", label: "Usuarios", roles: ["super_admin"] },
   { href: "/asistente", label: "Asistente", roles: ["super_admin", "responsable", "operador_lectura"] },
   { href: "/validacion", label: "Validación", roles: ["super_admin", "responsable", "operador_lectura"] }

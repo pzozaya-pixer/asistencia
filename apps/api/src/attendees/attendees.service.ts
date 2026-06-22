@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -7,13 +8,17 @@ import { randomUUID } from 'node:crypto';
 import { AuthenticatedUser } from '../auth/token.service';
 import { DatabaseService } from '../database/database.service';
 import { StorageService } from '../storage/storage.service';
+import { UpsertAttendeeDto } from './dto/upsert-attendee.dto';
 
 type AttendeeRow = {
   id: string;
   dniNie: string;
   telefono: string | null;
+  email: string | null;
   nombre: string;
   apellidos: string;
+  observaciones: string | null;
+  activo: boolean;
   hasPhoto: boolean;
   photoBucket: string | null;
   photoPath: string | null;
@@ -43,8 +48,11 @@ export class AttendeesService {
           a.id,
           a.dni_nie as "dniNie",
           a.telefono,
+          a.email,
           a.nombre,
           a.apellidos,
+          a.observaciones,
+          a.activo,
           (a.foto_archivo_id is not null) as "hasPhoto",
           ar.bucket as "photoBucket",
           ar.ruta as "photoPath",
@@ -76,8 +84,11 @@ export class AttendeesService {
           a.id,
           a.dni_nie,
           a.telefono,
+          a.email,
           a.nombre,
           a.apellidos,
+          a.observaciones,
+          a.activo,
           a.foto_archivo_id,
           ar.bucket,
           ar.ruta
@@ -87,7 +98,150 @@ export class AttendeesService {
       [normalizedQuery ?? null],
     );
 
-    return result.rows.map((row) => {
+    return result.rows.map((row) => this.mapAttendeeRow(row));
+  }
+
+  async create(payload: UpsertAttendeeDto) {
+    try {
+      const result = await this.database.query<AttendeeRow>(
+        `
+          insert into asistentes (
+            id, dni_nie, nombre, apellidos, telefono, email, observaciones, activo
+          )
+          values ($1, $2, $3, $4, $5, $6, $7, $8)
+          returning
+            id,
+            dni_nie as "dniNie",
+            telefono,
+            email,
+            nombre,
+            apellidos,
+            observaciones,
+            activo,
+            (foto_archivo_id is not null) as "hasPhoto",
+            null::text as "photoBucket",
+            null::text as "photoPath",
+            '[]'::json as activities
+        `,
+        [
+          randomUUID(),
+          this.normalizeDocument(payload.dniNie),
+          payload.nombre.trim(),
+          payload.apellidos.trim(),
+          payload.telefono?.trim() || null,
+          payload.email?.trim().toLowerCase() || null,
+          payload.observaciones?.trim() || null,
+          payload.activo ?? true,
+        ],
+      );
+
+      return this.mapAttendeeRow(result.rows[0]);
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        throw new ConflictException(
+          'Ya existe un asistente con ese DNI/NIE.',
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  async update(attendeeId: string, payload: UpsertAttendeeDto) {
+    const existing = await this.database.query<{
+      id: string;
+      dniNie: string;
+      nombre: string;
+      apellidos: string;
+      telefono: string | null;
+      email: string | null;
+      observaciones: string | null;
+      activo: boolean;
+    }>(
+      `
+        select
+          id,
+          dni_nie as "dniNie",
+          nombre,
+          apellidos,
+          telefono,
+          email,
+          observaciones,
+          activo
+        from asistentes
+        where id = $1
+          and deleted_at is null
+        limit 1
+      `,
+      [attendeeId],
+    );
+
+    const row = existing.rows[0];
+
+    if (!row) {
+      throw new NotFoundException('Asistente no encontrado.');
+    }
+
+    try {
+      const result = await this.database.query<AttendeeRow>(
+        `
+          update asistentes
+          set
+            dni_nie = $2,
+            nombre = $3,
+            apellidos = $4,
+            telefono = $5,
+            email = $6,
+            observaciones = $7,
+            activo = $8,
+            updated_at = timezone('utc', now())
+          where id = $1
+            and deleted_at is null
+          returning
+            id,
+            dni_nie as "dniNie",
+            telefono,
+            email,
+            nombre,
+            apellidos,
+            observaciones,
+            activo,
+            (foto_archivo_id is not null) as "hasPhoto",
+            null::text as "photoBucket",
+            null::text as "photoPath",
+            '[]'::json as activities
+        `,
+        [
+          attendeeId,
+          this.normalizeDocument(payload.dniNie ?? row.dniNie),
+          payload.nombre?.trim() ?? row.nombre,
+          payload.apellidos?.trim() ?? row.apellidos,
+          payload.telefono !== undefined
+            ? payload.telefono.trim() || null
+            : row.telefono,
+          payload.email !== undefined
+            ? payload.email.trim().toLowerCase() || null
+            : row.email,
+          payload.observaciones !== undefined
+            ? payload.observaciones.trim() || null
+            : row.observaciones,
+          payload.activo ?? row.activo,
+        ],
+      );
+
+      return this.mapAttendeeRow(result.rows[0]);
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        throw new ConflictException(
+          'Ya existe otro asistente con ese DNI/NIE.',
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  private mapAttendeeRow(row: AttendeeRow) {
       const activities = row.activities ?? [];
       const preferredActivity =
         activities.find((activity) => activity.estado === 'activa') ??
@@ -102,7 +256,10 @@ export class AttendeesService {
         estadoActividad: preferredActivity?.estadoInscripcion ?? null,
         photoUrl: row.photoPath ? `/api/attendees/${row.id}/photo` : null,
       };
-    });
+  }
+
+  private normalizeDocument(value: string) {
+    return value.trim().toUpperCase().replace(/\s+/g, '');
   }
 
   async findPublic(query?: string) {

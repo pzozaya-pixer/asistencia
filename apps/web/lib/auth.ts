@@ -23,8 +23,11 @@ export type AttendeeLookupResult = {
   actividadId?: string | null;
   dniNie: string;
   telefono?: string | null;
+  email?: string | null;
   nombre: string;
   apellidos: string;
+  observaciones?: string | null;
+  activo?: boolean;
   hasPhoto: boolean;
   photoUrl?: string | null;
   actividad?: string | null;
@@ -254,6 +257,75 @@ export async function searchPublicAttendees(query: string) {
   }
 
   return (await response.json()) as AttendeeLookupResult[];
+}
+
+export async function createAttendee(payload: {
+  dniNie: string;
+  nombre: string;
+  apellidos: string;
+  telefono?: string;
+  email?: string;
+  observaciones?: string;
+  activo?: boolean;
+}) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch("/api/attendees", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as AttendeeLookupResult;
+}
+
+export async function updateAttendee(
+  attendeeId: string,
+  payload: {
+    dniNie: string;
+    nombre: string;
+    apellidos: string;
+    telefono?: string;
+    email?: string;
+    observaciones?: string;
+    activo?: boolean;
+  }
+) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch(`/api/attendees/${attendeeId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as AttendeeLookupResult;
 }
 
 export async function createAttendanceRecord(payload: {

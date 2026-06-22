@@ -11,6 +11,7 @@ import {
   getStoredUser,
   importActivityAttendees,
   removeActivityAttendee,
+  searchAttendees,
   uploadAttendeePhoto,
   updateActivity,
   updateActivityAttendee,
@@ -23,6 +24,14 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
 import { StatusBadge } from "@/components/status-badge";
+
+function normalizeLookupValue(value: string) {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function normalizePhoneValue(value: string) {
+  return value.replace(/\D/g, "");
+}
 
 const statusLabels: Record<ActivityRecord["estado"], string> = {
   borrador: "Borrador",
@@ -75,8 +84,10 @@ export default function ActivitiesPage() {
   const [isLoadingAttendees, setIsLoadingAttendees] = useState(false);
   const [isSavingAttendee, setIsSavingAttendee] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isAutofillingAttendee, setIsAutofillingAttendee] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [attendeeLookupNotice, setAttendeeLookupNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setSessionUser(getStoredUser());
@@ -192,6 +203,71 @@ export default function ActivitiesPage() {
     };
   }, [activities, selectedActivityId, sessionUser]);
 
+  useEffect(() => {
+    const normalizedDni = normalizeLookupValue(attendeeForm.dniNie);
+    const normalizedPhone = normalizePhoneValue(attendeeForm.telefono);
+    const shouldLookupByDni = normalizedDni.length >= 8;
+    const shouldLookupByPhone = normalizedPhone.length >= 9;
+    const lookupValue = shouldLookupByDni ? attendeeForm.dniNie : shouldLookupByPhone ? attendeeForm.telefono : "";
+
+    if (!lookupValue) {
+      setAttendeeLookupNotice(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      setIsAutofillingAttendee(true);
+
+      try {
+        const matches = await searchAttendees(lookupValue);
+
+        if (cancelled) {
+          return;
+        }
+
+        const exactMatch = matches.find((entry) => {
+          if (shouldLookupByDni) {
+            return normalizeLookupValue(entry.dniNie) === normalizedDni;
+          }
+
+          return normalizePhoneValue(entry.telefono ?? "") === normalizedPhone;
+        });
+
+        if (!exactMatch) {
+          setAttendeeLookupNotice(null);
+          return;
+        }
+
+        setAttendeeForm((current) => ({
+          ...current,
+          dniNie: exactMatch.dniNie,
+          nombre: exactMatch.nombre,
+          apellidos: exactMatch.apellidos,
+          telefono: exactMatch.telefono ?? "",
+          email: exactMatch.email ?? "",
+          observaciones: current.observaciones
+        }));
+        setAttendeeLookupNotice(
+          `Ficha recuperada automáticamente para ${exactMatch.nombre} ${exactMatch.apellidos}.`
+        );
+      } catch {
+        if (!cancelled) {
+          setAttendeeLookupNotice(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsAutofillingAttendee(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [attendeeForm.dniNie, attendeeForm.telefono]);
+
   function resetForCreate() {
     setSelectedActivityId(null);
     setActivityForm({
@@ -199,6 +275,7 @@ export default function ActivitiesPage() {
       responsableUserId: sessionUser?.role === "responsable" ? sessionUser.id : ""
     });
     setAttendeeForm(initialAttendeeForm);
+    setAttendeeLookupNotice(null);
     setError(null);
     setNotice(null);
   }
@@ -304,6 +381,7 @@ export default function ActivitiesPage() {
         )
       );
       setAttendeeForm(initialAttendeeForm);
+      setAttendeeLookupNotice(null);
       setNotice("Asistente vinculado al evento.");
     } catch (saveError) {
       setError(
@@ -638,7 +716,7 @@ export default function ActivitiesPage() {
       <section className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
         <SectionCard
           title="Alta e importación de asistentes"
-          description="Añade uno a uno o importa una hoja Excel con columnas DNI/NIE, nombre y apellidos."
+          description="Añade uno a uno o importa una hoja Excel. Si el asistente ya existe, la ficha se completará automáticamente."
         >
           <form className="space-y-4" onSubmit={handleAttendeeSubmit}>
             <div className="grid gap-4 md:grid-cols-2">
@@ -690,6 +768,18 @@ export default function ActivitiesPage() {
                 onChange={(value) => setAttendeeForm((current) => ({ ...current, email: value }))}
               />
             </div>
+
+            {isAutofillingAttendee ? (
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                Buscando ficha existente...
+              </div>
+            ) : null}
+
+            {attendeeLookupNotice ? (
+              <div className="rounded-[24px] border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-950">
+                {attendeeLookupNotice}
+              </div>
+            ) : null}
 
             <label className="space-y-2 text-sm font-medium text-ink">
               <span>Observaciones</span>
