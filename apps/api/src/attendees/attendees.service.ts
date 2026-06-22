@@ -105,6 +105,20 @@ export class AttendeesService {
     });
   }
 
+  async findPublic(query?: string) {
+    const rows = await this.findAll(query);
+
+    return Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        photoUrl:
+          row.hasPhoto && row.id
+            ? (await this.getPhotoUrl(row.id).catch(() => ({ photoUrl: null }))).photoUrl
+            : null,
+      })),
+    );
+  }
+
   async uploadPhoto(
     attendeeId: string,
     file: { buffer: Buffer; originalname: string; mimetype: string } | undefined,

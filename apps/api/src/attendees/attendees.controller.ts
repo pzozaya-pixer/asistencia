@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthenticatedUser } from '../auth/token.service';
+import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { SearchAttendeeDto } from './dto/search-attendee.dto';
@@ -23,6 +24,12 @@ type RequestWithUser = {
 @Controller('attendees')
 export class AttendeesController {
   constructor(private readonly attendeesService: AttendeesService) {}
+
+  @Public()
+  @Get('public')
+  findPublic(@Query() query: SearchAttendeeDto) {
+    return this.attendeesService.findPublic(query.q);
+  }
 
   @Get()
   @Roles(Role.SuperAdmin, Role.Responsable, Role.OperadorLectura)

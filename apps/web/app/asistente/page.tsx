@@ -3,9 +3,8 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import {
-  createQrSession,
-  fetchProtectedAsset,
-  searchAttendees,
+  createPublicQrSession,
+  searchPublicAttendees,
   type AttendeeLookupResult,
   type QrSessionResponse
 } from "@/lib/auth";
@@ -37,7 +36,15 @@ export default function PublicAttendeePage() {
     async function loadResults() {
       const trimmedQuery = deferredQuery.trim();
 
-      if (trimmedQuery.length > 0 && trimmedQuery.length < 5) {
+      if (!trimmedQuery) {
+        setIsLoading(false);
+        setError(null);
+        setResults([]);
+        setSelectedAttendeeId(null);
+        return;
+      }
+
+      if (trimmedQuery.length < 5) {
         setIsLoading(false);
         setError(null);
         setResults([]);
@@ -49,7 +56,7 @@ export default function PublicAttendeePage() {
       setError(null);
 
       try {
-        const nextResults = await searchAttendees(trimmedQuery);
+        const nextResults = await searchPublicAttendees(trimmedQuery);
 
         if (cancelled) {
           return;
@@ -178,13 +185,8 @@ export default function PublicAttendeePage() {
       }
 
       try {
-        const blob = await fetchProtectedAsset(selectedAttendee.photoUrl);
-        const objectUrl = URL.createObjectURL(blob);
-
         if (!cancelled) {
-          setPhotoObjectUrl(objectUrl);
-        } else {
-          URL.revokeObjectURL(objectUrl);
+          setPhotoObjectUrl(selectedAttendee.photoUrl);
         }
       } catch {
         if (!cancelled) {
@@ -197,13 +199,7 @@ export default function PublicAttendeePage() {
 
     return () => {
       cancelled = true;
-      setPhotoObjectUrl((current) => {
-        if (current) {
-          URL.revokeObjectURL(current);
-        }
-
-        return null;
-      });
+      setPhotoObjectUrl(null);
     };
   }, [selectedAttendee?.id, selectedAttendee?.photoUrl]);
 
@@ -219,7 +215,7 @@ export default function PublicAttendeePage() {
     setQrImageUrl(null);
 
     try {
-      const nextQrSession = await createQrSession({
+      const nextQrSession = await createPublicQrSession({
         attendeeId: selectedAttendee.id,
         activityId: selectedActivity.id
       });
@@ -395,7 +391,7 @@ export default function PublicAttendeePage() {
                 </button>
               ))}
 
-              {!isLoading && results.length === 0 ? (
+              {!isLoading && deferredQuery.trim().length >= 5 && results.length === 0 ? (
                 <div className="rounded-[26px] border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
                   No encontramos ninguna coincidencia con esos datos.
                 </div>

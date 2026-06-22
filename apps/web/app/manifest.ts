@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Asistencia Demo",
     short_name: "Asistencia",
     description: "PWA de control de asistencia para asistentes y responsables",
-    start_url: "/",
+    start_url: "/asistente",
     display: "standalone",
     background_color: "#fffdf9",
     theme_color: "#102033",
@@ -24,4 +24,3 @@ export default function manifest(): MetadataRoute.Manifest {
     ]
   };
 }
-

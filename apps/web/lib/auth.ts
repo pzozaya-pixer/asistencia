@@ -237,6 +237,25 @@ export async function searchAttendees(query: string) {
   return (await response.json()) as AttendeeLookupResult[];
 }
 
+export async function searchPublicAttendees(query: string) {
+  const url = new URL("/api/attendees/public", window.location.origin);
+
+  if (query.trim()) {
+    url.searchParams.set("q", query.trim());
+  }
+
+  const response = await fetch(url, {
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as AttendeeLookupResult[];
+}
+
 export async function createAttendanceRecord(payload: {
   actividadId: string;
   asistenteId: string;
@@ -739,6 +758,28 @@ export async function createQrSession(payload: {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`
+    },
+    cache: "no-store",
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as QrSessionResponse;
+}
+
+export async function createPublicQrSession(payload: {
+  attendeeId: string;
+  activityId: string;
+  ttlSeconds?: number;
+}) {
+  const response = await fetch("/api/qr-sessions/public", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
     },
     cache: "no-store",
     body: JSON.stringify(payload)
