@@ -792,6 +792,29 @@ export async function uploadAttendeePhoto(attendeeId: string, file: File) {
   };
 }
 
+export async function removeAttendeePhoto(attendeeId: string) {
+  const token = getStoredAccessToken();
+
+  if (!token) {
+    throw new Error("La sesión ha caducado.");
+  }
+
+  const response = await fetch(`/api/attendees/${attendeeId}/photo`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as { success: boolean };
+}
+
 export async function uploadPublicAttendeePhoto(attendeeId: string, file: File) {
   const formData = new FormData();
   formData.append("file", file);

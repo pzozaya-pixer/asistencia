@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import {
   createAttendee,
+  fetchProtectedAsset,
   getStoredUser,
+  removeAttendeePhoto,
   searchAttendees,
   updateAttendee,
   uploadAttendeePhoto,
@@ -31,6 +33,8 @@ export default function AttendeesPage() {
   const [form, setForm] = useState(initialForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [isRemovingPhoto, setIsRemovingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -98,9 +102,45 @@ export default function AttendeesPage() {
     });
   }, [attendees, selectedAttendeeId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const selectedAttendee = attendees.find((entry) => entry.id === selectedAttendeeId);
+
+    async function loadPhoto() {
+      if (!selectedAttendee?.hasPhoto) {
+        setPhotoUrl(null);
+        return;
+      }
+
+      try {
+        const blob = await fetchProtectedAsset(`/api/attendees/${selectedAttendee.id}/photo`);
+        objectUrl = URL.createObjectURL(blob);
+
+        if (!cancelled) {
+          setPhotoUrl(objectUrl);
+        }
+      } catch {
+        if (!cancelled) {
+          setPhotoUrl(null);
+        }
+      }
+    }
+
+    void loadPhoto();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [attendees, selectedAttendeeId]);
+
   function resetForCreate() {
     setSelectedAttendeeId(null);
     setForm(initialForm);
+    setPhotoUrl(null);
     setError(null);
     setNotice(null);
   }
@@ -168,6 +208,14 @@ export default function AttendeesPage() {
           entry.id === selectedAttendeeId ? { ...entry, hasPhoto: true } : entry
         )
       );
+      const blob = await fetchProtectedAsset(`/api/attendees/${selectedAttendeeId}/photo`);
+      const objectUrl = URL.createObjectURL(blob);
+      setPhotoUrl((current) => {
+        if (current) {
+          URL.revokeObjectURL(current);
+        }
+        return objectUrl;
+      });
       setNotice("Fotografía actualizada.");
     } catch (uploadError) {
       setError(
@@ -175,6 +223,38 @@ export default function AttendeesPage() {
       );
     } finally {
       event.target.value = "";
+    }
+  }
+
+  async function handleRemovePhoto() {
+    if (!selectedAttendeeId) {
+      return;
+    }
+
+    setIsRemovingPhoto(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      await removeAttendeePhoto(selectedAttendeeId);
+      setAttendees((current) =>
+        current.map((entry) =>
+          entry.id === selectedAttendeeId ? { ...entry, hasPhoto: false } : entry
+        )
+      );
+      setPhotoUrl((current) => {
+        if (current) {
+          URL.revokeObjectURL(current);
+        }
+        return null;
+      });
+      setNotice("Fotografía eliminada.");
+    } catch (removeError) {
+      setError(
+        removeError instanceof Error ? removeError.message : "No se pudo eliminar la fotografía."
+      );
+    } finally {
+      setIsRemovingPhoto(false);
     }
   }
 
@@ -297,10 +377,48 @@ export default function AttendeesPage() {
             </label>
 
             {selectedAttendeeId ? (
-              <label className="block rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                <span className="mb-2 block font-medium text-ink">Fotografía</span>
-                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoChange} />
-              </label>
+              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                <span className="mb-3 block font-medium text-ink">Fotografía</span>
+                <div className="flex flex-col gap-4 md:flex-row md:items-start">
+                  <div className="flex h-40 w-32 items-center justify-center overflow-hidden rounded-[20px] border border-slate-300 bg-white">
+                    {photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={photoUrl}
+                        alt="Fotografía del asistente"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="px-3 text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Sin foto
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-3">
+                    <label className="inline-flex cursor-pointer items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-signal hover:text-signal">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={handlePhotoChange}
+                      />
+                      {photoUrl ? "Cambiar foto" : "Subir foto"}
+                    </label>
+                    {photoUrl ? (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => void handleRemovePhoto()}
+                          disabled={isRemovingPhoto}
+                          className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {isRemovingPhoto ? "Eliminando..." : "Eliminar foto"}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
             ) : null}
 
             {error ? (

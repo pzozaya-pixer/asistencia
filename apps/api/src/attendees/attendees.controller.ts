@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -93,5 +94,11 @@ export class AttendeesController {
   @Roles(Role.SuperAdmin, Role.Responsable, Role.OperadorLectura)
   getPhotoUrl(@Param('id') id: string) {
     return this.attendeesService.getPhotoUrl(id);
+  }
+
+  @Delete(':id/photo')
+  @Roles(Role.SuperAdmin, Role.Responsable)
+  removePhoto(@Param('id') id: string) {
+    return this.attendeesService.removePhoto(id);
   }
 }

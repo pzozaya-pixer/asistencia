@@ -427,6 +427,27 @@ export class AttendeesService {
     };
   }
 
+  async removePhoto(attendeeId: string) {
+    const result = await this.database.query<{ id: string }>(
+      `
+        update asistentes
+        set
+          foto_archivo_id = null,
+          updated_at = timezone('utc', now())
+        where id = $1
+          and deleted_at is null
+        returning id
+      `,
+      [attendeeId],
+    );
+
+    if (!result.rows[0]) {
+      throw new NotFoundException('Asistente no encontrado.');
+    }
+
+    return { success: true };
+  }
+
   private async getPhotoMetadata(attendeeId: string) {
     const result = await this.database.query<{
       bucket: string;
