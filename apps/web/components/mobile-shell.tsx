@@ -35,7 +35,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen px-3 py-4 sm:px-5 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-7xl flex-col gap-4 rounded-[36px] border border-white/60 bg-white/65 p-4 shadow-panel backdrop-blur sm:p-5 lg:p-6">
-        <header className="grid gap-4 rounded-[32px] border border-slate-200/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-4 text-white lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+        <header className="dashboard-shell-header grid gap-4 rounded-[32px] border border-slate-200/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-4 text-white lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200">
               Asistencia
