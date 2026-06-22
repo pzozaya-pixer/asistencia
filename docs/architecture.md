@@ -50,10 +50,8 @@ Entregar una demo funcional de control de asistencia con dos superficies princip
 - MinIO local para la demo
 - n8n únicamente para procesos auxiliares
 
-## Decisión pendiente del usuario
+## Decisión actual de identidad
 
-Definir si la autenticación final de la demo se apoyará en:
-
-1. Supabase Auth como fuente principal de identidad.
-2. JWT propio en NestJS con sincronización posterior hacia Supabase.
-
+- La demo operativa actual usa `JWT` propio en NestJS con `RBAC`.
+- La base PostgreSQL sigue preparada para convivir con un `Supabase` self-hosted posterior.
+- La evolución prevista es sincronizar o sustituir esta capa por `Supabase Auth` cuando se aborde la siguiente fase de producto.

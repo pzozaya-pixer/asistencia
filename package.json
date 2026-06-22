@@ -12,8 +12,9 @@
     "lint:api": "pnpm --dir apps/api lint",
     "test:api": "pnpm --dir apps/api test",
     "check": "pnpm lint:web && pnpm lint:api",
+    "demo:validate": "node ./infra/demo/validate-demo.mjs",
+    "backup:validate-local": "./infra/backup/validate-backups-local.sh",
     "compose:up": "docker compose up -d",
     "compose:down": "docker compose down"
   }
 }
-

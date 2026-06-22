@@ -1,0 +1,133 @@
+{
+  "name": "Asistencia · Alerta de pendientes",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-pending-alert",
+      "name": "Cron seguimiento",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{($env.AUTOMATION_API_BASE_URL || 'http://api:4000/api/v1') + '/automation/pending-validations'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automation-secret",
+              "value": "={{$env.AUTOMATION_SECRET}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-pending-alert",
+      "name": "Consultar pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.shouldNotify}}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-pending-alert",
+      "name": "Hay pendientes",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        760,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "message",
+              "name": "message",
+              "value": "={{$json.message + '\\nPendientes: ' + (($json.pendingAttendees || []).map((item) => item.name).join(', ') || 'sin detalle')}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-pending-message",
+      "name": "Construir aviso",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1020,
+        180
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron seguimiento": {
+      "main": [
+        [
+          {
+            "node": "Consultar pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar pendientes": {
+      "main": [
+        [
+          {
+            "node": "Hay pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hay pendientes": {
+      "main": [
+        [
+          {
+            "node": "Construir aviso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "pending-validations-v1"
+}

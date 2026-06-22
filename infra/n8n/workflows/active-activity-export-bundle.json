@@ -1,0 +1,103 @@
+{
+  "name": "Asistencia · Export bundle actividad activa",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-export-trigger",
+      "name": "Lanzar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{($env.AUTOMATION_API_BASE_URL || 'http://api:4000/api/v1') + '/automation/export-bundle'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automation-secret",
+              "value": "={{$env.AUTOMATION_SECRET}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-export-bundle",
+      "name": "Generar export bundle",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "excelUrl",
+              "name": "excelUrl",
+              "value": "={{(($json.files || []).find((file) => file.kind === 'excel') || {}).signedUrl || ''}}",
+              "type": "string"
+            },
+            {
+              "id": "pdfUrl",
+              "name": "pdfUrl",
+              "value": "={{(($json.files || []).find((file) => file.kind === 'pdf') || {}).signedUrl || ''}}",
+              "type": "string"
+            },
+            {
+              "id": "message",
+              "name": "message",
+              "value": "=\"Bundle generado en \" + $json.generatedAt",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-export-links",
+      "name": "Extraer enlaces",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        800,
+        260
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Lanzar manualmente": {
+      "main": [
+        [
+          {
+            "node": "Generar export bundle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar export bundle": {
+      "main": [
+        [
+          {
+            "node": "Extraer enlaces",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "active-activity-export-bundle-v1"
+}

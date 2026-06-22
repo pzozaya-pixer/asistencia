@@ -2,10 +2,12 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ActivitiesModule } from './activities/activities.module';
+import { AutomationModule } from './automation/automation.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { AttendeesModule } from './attendees/attendees.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { RateLimitGuard } from './common/guards/rate-limit.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { CryptoModule } from './crypto/crypto.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -25,12 +27,14 @@ import { UsersModule } from './users/users.module';
     HealthModule,
     AuthModule,
     StorageModule,
+    AutomationModule,
     ActivitiesModule,
     AttendeesModule,
     AttendanceModule,
     QrSessionsModule,
   ],
   providers: [
+    { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],

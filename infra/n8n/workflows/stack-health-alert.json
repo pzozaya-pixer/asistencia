@@ -1,0 +1,131 @@
+{
+  "name": "Asistencia · Health alert",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/10 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-health",
+      "name": "Cron salud",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{($env.AUTOMATION_API_BASE_URL || 'http://api:4000/api/v1').replace('/automation', '') + '/health/ready'}}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "http-health",
+      "name": "Comprobar readiness",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.statusCode || 200}}",
+              "operation": "largerEqual",
+              "value2": 500
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-health-failed",
+      "name": "Servicio degradado",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        760,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "message",
+              "name": "message",
+              "value": "={{'Readiness degradado: ' + JSON.stringify($json.body || $json)}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-health-alert",
+      "name": "Preparar alerta",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1020,
+        180
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron salud": {
+      "main": [
+        [
+          {
+            "node": "Comprobar readiness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprobar readiness": {
+      "main": [
+        [
+          {
+            "node": "Servicio degradado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Servicio degradado": {
+      "main": [
+        [
+          {
+            "node": "Preparar alerta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "stack-health-alert-v1"
+}

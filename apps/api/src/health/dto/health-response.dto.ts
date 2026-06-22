@@ -1,10 +1,10 @@
 export class HealthResponseDto {
-  status!: 'ok';
+  status!: 'ok' | 'degraded';
   service!: string;
   timestamp!: string;
-  integrations!: {
-    auth: string;
-    persistence: string;
-    orm: string;
+  checks!: {
+    api: 'ok';
+    database: 'ok' | 'error';
+    storage: 'ok' | 'error';
   };
 }

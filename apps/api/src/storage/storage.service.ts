@@ -94,6 +94,11 @@ export class StorageService {
     );
   }
 
+  async checkConnection() {
+    await this.client.listBuckets();
+    return true;
+  }
+
   private getExtension(filename: string) {
     const lastDot = filename.lastIndexOf('.');
     return lastDot >= 0 ? filename.slice(lastDot) : '';

@@ -1,0 +1,106 @@
+{
+  "name": "Asistencia · Resumen diario",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 20 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-daily-summary",
+      "name": "Cron diario",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{($env.AUTOMATION_API_BASE_URL || 'http://api:4000/api/v1') + '/automation/daily-summary'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automation-secret",
+              "value": "={{$env.AUTOMATION_SECRET}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-daily-summary",
+      "name": "Cargar resumen diario",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "subject",
+              "name": "subject",
+              "value": "=Resumen asistencia {{$json.date}}",
+              "type": "string"
+            },
+            {
+              "id": "body",
+              "name": "body",
+              "value": "={{$json.message + '\\n\\nPendientes destacados: ' + (($json.pendingAttendees || []).map((item) => item.name).join(', ') || 'ninguno')}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-daily-message",
+      "name": "Preparar mensaje",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        800,
+        260
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron diario": {
+      "main": [
+        [
+          {
+            "node": "Cargar resumen diario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar resumen diario": {
+      "main": [
+        [
+          {
+            "node": "Preparar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "daily-summary-v1"
+}

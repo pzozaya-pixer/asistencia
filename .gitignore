@@ -11,4 +11,4 @@ pnpm-lock.yaml
 storage
 tmp
 *.log
-
+backups/
